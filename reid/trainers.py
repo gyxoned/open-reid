@@ -3,17 +3,19 @@ import time
 
 import torch
 from torch.autograd import Variable
+import pdb
 
 from .evaluation_metrics import accuracy
-from .loss import OIMLoss, TripletLoss
+from .loss import OIMLoss, TripletLoss, SupervisedClusteringLoss
 from .utils.meters import AverageMeter
 
 
 class BaseTrainer(object):
-    def __init__(self, model, criterion):
+    def __init__(self, model, criterion, num_classes):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
+        self.num_classes = num_classes
 
     def train(self, epoch, data_loader, optimizer, print_freq=1):
         self.model.train()
@@ -68,6 +70,10 @@ class Trainer(BaseTrainer):
 
     def _forward(self, inputs, targets):
         outputs = self.model(*inputs)
+        num_classes = self.num_classes
+        Y = torch.zeros(targets.size(0), num_classes)
+        for i in range(targets.size(0)):
+            Y[i][targets[i].cpu().data] = 1.0
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, targets)
             prec, = accuracy(outputs.data, targets.data)
@@ -78,6 +84,10 @@ class Trainer(BaseTrainer):
             prec = prec[0]
         elif isinstance(self.criterion, TripletLoss):
             loss, prec = self.criterion(outputs, targets)
+        elif isinstance(self.criterion, SupervisedClusteringLoss):
+            loss = self.criterion(outputs, Y)
+            prec, = accuracy(outputs.data, targets.data)
+            prec = prec[0]
         else:
             raise ValueError("Unsupported loss:", self.criterion)
         return loss, prec

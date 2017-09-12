@@ -19,13 +19,14 @@ class ResNet(nn.Module):
         152: torchvision.models.resnet152,
     }
 
-    def __init__(self, depth, pretrained=True, cut_at_pooling=False,
+    def __init__(self, depth, pretrained=True, cut_at_pooling=False, cut_after_embed=False,
                  num_features=0, norm=False, dropout=0, num_classes=0):
         super(ResNet, self).__init__()
 
         self.depth = depth
         self.pretrained = pretrained
         self.cut_at_pooling = cut_at_pooling
+        self.cut_after_embed = cut_after_embed
 
         # Construct base (pretrained) resnet
         if depth not in ResNet.__factory:
@@ -85,6 +86,9 @@ class ResNet(nn.Module):
             x = self.drop(x)
         if self.num_classes > 0:
             x = self.classifier(x)
+        if self.cut_after_embed:
+            x = F.normalize(x)
+            return x
         return x
 
     def reset_params(self):
