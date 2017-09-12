@@ -4,7 +4,7 @@ import os.path as osp
 
 import numpy as np
 import sys
-sys.path.append('/home/ytshen/git/open-reid')
+sys.path.append('./')
 import torch
 from torch import nn
 from torch.backends import cudnn
@@ -36,8 +36,10 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
     num_classes = (dataset.num_trainval_ids if combine_trainval
                    else dataset.num_train_ids)
 
+
     train_transformer = T.Compose([
         T.RandomSizedRectCrop(height, width),
+        T.RandomSizedEarser(),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,
