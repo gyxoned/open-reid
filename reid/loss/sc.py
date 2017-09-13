@@ -40,7 +40,7 @@ class SupervisedClusteringLoss(nn.Module):
         FJ = torch.mm(pinvF, C)
         G = torch.mm(torch.mm(F.data, FJ) - C, FJ.transpose(0,1))
         G = Variable(G, requires_grad=False)
-        loss = torch.sum(-G * F)
+        loss = torch.sum(G * F)
         return loss
         
         
