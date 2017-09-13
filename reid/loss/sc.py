@@ -21,10 +21,12 @@ class SupervisedClusteringLoss(nn.Module):
         Y = Y.type(torch.FloatTensor).cuda()
         diagy = torch.sum(Y, 0)
         mask = diagy.lt(1)
-        diagy = torch.rsqrt(diagy.masked_fill_(mask, 1))
+        diagy = torch.div(torch.ones(diagy.size()).cuda(), diagy.masked_fill_(mask, 1))
         diagy = torch.diag(diagy)
         J = torch.mm(Y, diagy)
-        ###solve the pinv of F
+        C = torch.mm(Y, J.transpose(0,1))
+        torch.norm(torch.mm(torch.mm(Y, J.transpose(0,1)), Y) - Y)
+        ###solve pinv_F
         U,S,V = torch.svd(F.data)
         Slength = float(S.size(0))
         maxS = 1e-15 * torch.max(S) * Slength
@@ -35,10 +37,10 @@ class SupervisedClusteringLoss(nn.Module):
         pinvF = torch.mm(pinvF, V.transpose(0,1))
         pinvF = pinvF.transpose(0,1)
         ##solve the loss
-        FJ = torch.mm(pinvF, J)
-        G = torch.mm(torch.mm(F.data, FJ) - J, FJ.transpose(0,1))
+        FJ = torch.mm(pinvF, C)
+        G = torch.mm(torch.mm(F.data, FJ) - C, FJ.transpose(0,1))
         G = Variable(G, requires_grad=False)
-        loss = torch.sum(G * F)
+        loss = torch.sum(-G * F)
         return loss
         
         

@@ -84,11 +84,10 @@ class ResNet(nn.Module):
             x = F.relu(x)
         if self.dropout > 0:
             x = self.drop(x)
+        if self.cut_after_embed:
+            return x
         if self.num_classes > 0:
             x = self.classifier(x)
-        if self.cut_after_embed:
-            x = F.normalize(x)
-            return x
         return x
 
     def reset_params(self):

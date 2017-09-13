@@ -86,8 +86,7 @@ class Trainer(BaseTrainer):
             loss, prec = self.criterion(outputs, targets)
         elif isinstance(self.criterion, SupervisedClusteringLoss):
             loss = self.criterion(outputs, Y)
-            prec, = accuracy(outputs.data, targets.data)
-            prec = prec[0]
+            prec = 0.0
         else:
             raise ValueError("Unsupported loss:", self.criterion)
         return loss, prec
