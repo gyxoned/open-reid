@@ -69,12 +69,12 @@ class ResNet(nn.Module):
                 break
             x = module(x)
 
-        if self.cut_at_pooling:
-            return x
 
         x = F.avg_pool2d(x, x.size()[2:])
         x = x.view(x.size(0), -1)
 
+        if self.cut_at_pooling:
+            return x
         if self.has_embedding:
             x = self.feat(x)
             x = self.feat_bn(x)

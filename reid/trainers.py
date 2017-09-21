@@ -11,11 +11,12 @@ from .utils.meters import AverageMeter
 
 
 class BaseTrainer(object):
-    def __init__(self, model, criterion, num_classes):
+    def __init__(self, model, criterion, num_classes=0, num_instances=4):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.num_classes = num_classes
+        self.num_instances = num_instances
 
     def train(self, epoch, data_loader, optimizer, print_freq=1):
         self.model.train()
@@ -87,6 +88,35 @@ class Trainer(BaseTrainer):
         elif isinstance(self.criterion, SupervisedClusteringLoss):
             loss = self.criterion(outputs, Y)
             prec = 0.0
+        else:
+            raise ValueError("Unsupported loss:", self.criterion)
+        return loss, prec
+
+
+class RandomWalkTrainer(BaseTrainer):
+    def _parse_data(self, inputs):
+        imgs, _, pids, _ = inputs
+        inputs = [Variable(imgs)]
+        targets = Variable(pids.cuda())
+        return inputs, targets
+
+    def _forward(self, inputs, targets):
+        pairwise_targets = Variable(torch.zeros(targets.size(0),\
+                                int(targets.size(0) - targets.size(0) / self.num_instances)).cuda())
+        targets = targets.view(int(targets.size(0) / self.num_instances), -1)
+        probe_targets = targets[:,0]
+        gallery_targets = targets[:, 1:self.num_instances].contiguous().view(-1)
+        targets = targets.view(-1)
+        for i in range(int(targets.size(0) / self.num_instances)):
+            pairwise_targets[i] = (probe_targets[i] == gallery_targets).long()
+        for j in range(int(targets.size(0) / self.num_instances), targets.size(0)):
+            pairwise_targets[j] = (gallery_targets[j - int(targets.size(0) / self.num_instances)] == gallery_targets).long()
+        pairwise_targets = pairwise_targets.view(-1).long()
+        outputs = self.model(*inputs)
+        if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
+            loss = self.criterion(outputs, pairwise_targets)
+            prec, = accuracy(outputs.data, pairwise_targets.data)
+            prec = prec[0]
         else:
             raise ValueError("Unsupported loss:", self.criterion)
         return loss, prec
