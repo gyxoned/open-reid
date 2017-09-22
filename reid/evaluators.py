@@ -18,7 +18,7 @@ cudnn.benchmark = True
 import pdb
 
 
-def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_topk=0, print_freq=1):
+def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
     model.eval()
 
     batch_time = AverageMeter()
@@ -203,6 +203,6 @@ class CascadeEvaluator(object):
             bar = max(distmat[i][indices[:rerank_topk]])
             gap = max(bar + 1. - distmat[i, indices[rerank_topk]], 0)
             if gap > 0:
-                distmat[i][indices[[rerank_topk]:]] += gap
+                distmat[i][indices[rerank_topk:]] += gap
         print("Second stage evaluation:")
         return evaluate_all(distmat, query, gallery)

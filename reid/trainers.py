@@ -101,6 +101,7 @@ class RandomWalkTrainer(BaseTrainer):
         return inputs, targets
 
     def _forward(self, inputs, targets):
+        #targets label generation
         pairwise_targets = Variable(torch.zeros(targets.size(0),\
                                 int(targets.size(0) - targets.size(0) / self.num_instances)).cuda())
         targets = targets.view(int(targets.size(0) / self.num_instances), -1)
@@ -113,6 +114,7 @@ class RandomWalkTrainer(BaseTrainer):
             pairwise_targets[j] = (gallery_targets[j - int(targets.size(0) / self.num_instances)] == gallery_targets).long()
         pairwise_targets = pairwise_targets.view(-1).long()
         outputs = self.model(*inputs)
+
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, pairwise_targets)
             prec, = accuracy(outputs.data, pairwise_targets.data)
