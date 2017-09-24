@@ -105,7 +105,7 @@ def main(args):
 
     embed_model = RandomWalkEmbed(instances_num=args.num_instances, 
                             feat_num=2048, num_classes=2)
-   
+
     if args.retrain:
         print('loading base part of pretrained model...')
         checkpoint = load_checkpoint(args.retrain)
@@ -118,11 +118,11 @@ def main(args):
 
     model = RandomWalkNet(instances_num=args.num_instances, 
                         base_model=base_model, embed_model=embed_model)
- 
+
     # Distance metric
     metric = DistanceMetric(algorithm=args.dist_metric)
 
-    # Load from checkpoint
+        # Load from checkpoint
     start_epoch = best_top1 = 0
     best_mAP = 0
     if args.resume:
@@ -141,6 +141,11 @@ def main(args):
 
     if args.evaluate:
         metric.train(model, train_loader)
+        if args.evaluate_from:
+            print('loading trained model...')
+            checkpoint = load_checkpoint(args.evaluate_from)
+            model.load_state_dict(checkpoint['state_dict'])
+
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
         print("Test:")
@@ -234,6 +239,7 @@ if __name__ == '__main__':
     parser.add_argument('--retrain', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluation only")
+    parser.add_argument('--evaluate-from', type=str, default='', metavar='PATH')
     parser.add_argument('--epochs', type=int, default=150)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--print-freq', type=int, default=1)

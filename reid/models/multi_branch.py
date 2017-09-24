@@ -29,14 +29,14 @@ class RandomWalkNet(nn.Module):
         g_g_score = self.embed(gallery_x, gallery_x)
         
         #Random Walk Computation
-        alpha = 0.99
+        alpha = 0.01
         ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
         one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
-        D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,0], 1))
-        A = torch.matmul(D, g_g_score[:,:,0])
+        D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))
+        A = torch.matmul(D, g_g_score[:,:,1])
         A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
         A = A.transpose(0,1)
-        p_g_score[:,:,0] = torch.matmul(p_g_score[:,:,0].clone(), A)
+        p_g_score[:,:,1] = torch.matmul(p_g_score[:,:,1].clone(), A)
         p_g_score = p_g_score.view(-1, 2)
         g_g_score = g_g_score.view(-1, 2)
         outputs = torch.cat((p_g_score, g_g_score), 0)

@@ -12,6 +12,7 @@ from .utils.meters import AverageMeter
 from .utils import to_numpy
 from .utils.data.preprocessor import KeyValuePreprocessor
 from torch.autograd import Variable
+import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 cudnn.enabled = True
 cudnn.benchmark = True
@@ -30,10 +31,28 @@ def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_to
     for i in range(len(query)):
       gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
       
-      scores = model(Variable(probe_feature[i].view(1 ,-1).cuda(), volatile=True), 
+      #Compute random walk
+      p_g_score = model(Variable(probe_feature[i].view(1 ,-1).cuda(), volatile=True), 
             Variable(gallery_feature.cuda(), volatile=True))
-      pairwise_score[i, : , :] = scores
-
+      g_g_score = model(Variable(gallery_feature.cuda(), volatile=True), 
+            Variable(gallery_feature.cuda(), volatile=True)) 
+      p_g_score = p_g_score.view(-1, 2)
+      g_g_score = g_g_score.view(-1, 2)
+      p_g_score = F.softmax(p_g_score)
+      g_g_score = F.softmax(g_g_score)
+      p_g_score = p_g_score.view(1,-1,2)
+      g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)  
+      alpha = 0.4
+      ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
+      one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
+      D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))
+      A = torch.matmul(D, g_g_score[:,:,1])
+      A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
+      p_g_score[:,:,1] = torch.matmul(A, p_g_score[:,:,1].transpose(0,1).clone()).transpose(0,1)
+      p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone() 
+      p_g_score = p_g_score.view(-1, 2)
+      p_g_score = p_g_score.contiguous() 
+      pairwise_score[i, : , :] = p_g_score
 
       batch_time.update(time.time() - end)
       end = time.time()
@@ -168,7 +187,7 @@ class CascadeEvaluator(object):
         self.embed_dist_fn = embed_dist_fn
 
     def evaluate(self, data_loader, query, gallery, cache_file=None,
-                 rerank_topk=100):
+                 rerank_topk=300):
         # Extract features image by image
         features, _ = extract_features(self.base_model, data_loader)
 
@@ -193,7 +212,8 @@ class CascadeEvaluator(object):
                                 query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
 
         if self.embed_dist_fn is not None:
-            embeddings = self.embed_dist_fn(embeddings)
+            embeddings = embeddings[:, 0].data
+            #embeddings = self.embed_dist_fn(embeddings)
 
         # Merge two-stage distances
         for k, embed in enumerate(embeddings):
