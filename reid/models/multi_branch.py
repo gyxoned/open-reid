@@ -29,7 +29,7 @@ class RandomWalkNet(nn.Module):
         g_g_score = self.embed(gallery_x, gallery_x)
         
         #Random Walk Computation
-        alpha = 0.01
+        alpha = 0.5
         ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
         one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
         D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))

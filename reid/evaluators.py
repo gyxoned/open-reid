@@ -36,20 +36,20 @@ def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_to
             Variable(gallery_feature.cuda(), volatile=True))
       g_g_score = model(Variable(gallery_feature.cuda(), volatile=True), 
             Variable(gallery_feature.cuda(), volatile=True)) 
-      p_g_score = p_g_score.view(-1, 2)
-      g_g_score = g_g_score.view(-1, 2)
-      p_g_score = F.softmax(p_g_score)
-      g_g_score = F.softmax(g_g_score)
-      p_g_score = p_g_score.view(1,-1,2)
-      g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)  
-      alpha = 0.4
+      #p_g_score = p_g_score.view(-1, 2)
+      #g_g_score = g_g_score.view(-1, 2)
+      #p_g_score = F.softmax(p_g_score)
+      #g_g_score = F.softmax(g_g_score)
+      #p_g_score = p_g_score.view(1,-1,2)
+      #g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)  
+      alpha = 0.8
       ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
       one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
       D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))
       A = torch.matmul(D, g_g_score[:,:,1])
       A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
       p_g_score[:,:,1] = torch.matmul(A, p_g_score[:,:,1].transpose(0,1).clone()).transpose(0,1)
-      p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone() 
+      #p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone() 
       p_g_score = p_g_score.view(-1, 2)
       p_g_score = p_g_score.contiguous() 
       pairwise_score[i, : , :] = p_g_score
@@ -142,12 +142,12 @@ def evaluate_all(distmat, query=None, gallery=None,
 
     # Compute all kinds of CMC scores
     cmc_configs = {
-        'allshots': dict(separate_camera_set=False,
-                         single_gallery_shot=False,
-                         first_match_break=False),
-        'cuhk03': dict(separate_camera_set=True,
-                       single_gallery_shot=True,
-                       first_match_break=False),
+#        'allshots': dict(separate_camera_set=False,
+#                         single_gallery_shot=False,
+#                         first_match_break=False),
+#        'cuhk03': dict(separate_camera_set=True,
+#                       single_gallery_shot=True,
+#                       first_match_break=False),
         'market1501': dict(separate_camera_set=False,
                            single_gallery_shot=False,
                            first_match_break=True)}
@@ -155,16 +155,20 @@ def evaluate_all(distmat, query=None, gallery=None,
                             query_cams, gallery_cams, **params)
                   for name, params in cmc_configs.items()}
 
-    print('CMC Scores{:>12}{:>12}{:>12}'
-          .format('allshots', 'cuhk03', 'market1501'))
+    #print('CMC Scores{:>12}{:>12}{:>12}'
+    print('CMC Scores{:>12}'
+          #.format('allshots', 'cuhk03', 'market1501'))
+          .format('market1501'))
     for k in cmc_topk:
-        print('  top-{:<4}{:12.1%}{:12.1%}{:12.1%}'
-              .format(k, cmc_scores['allshots'][k - 1],
-                      cmc_scores['cuhk03'][k - 1],
-                      cmc_scores['market1501'][k - 1]))
+        #print('  top-{:<4}{:12.1%}{:12.1%}{:12.1%}'
+        print('  top-{:<4}{:12.1%}'
+              .format(k, 
+#                      cmc_scores['allshots'][k - 1],
+#                      cmc_scores['cuhk03'][k - 1],
+                      cmc_scores['market1501'][k-1]))
 
     # Use the allshots cmc top-1 score for validation criterion
-    return cmc_scores['allshots'][0], mAP
+    return cmc_scores['market1501'][0], mAP
 
 
 class Evaluator(object):
@@ -212,8 +216,8 @@ class CascadeEvaluator(object):
                                 query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
 
         if self.embed_dist_fn is not None:
-            embeddings = embeddings[:, 0].data
-            #embeddings = self.embed_dist_fn(embeddings)
+            #embeddings = embeddings[:, 0].data
+            embeddings = self.embed_dist_fn(embeddings)
 
         # Merge two-stage distances
         for k, embed in enumerate(embeddings):

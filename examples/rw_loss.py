@@ -146,10 +146,10 @@ def main(args):
             checkpoint = load_checkpoint(args.evaluate_from)
             model.load_state_dict(checkpoint['state_dict'])
 
-        #print("Validation:")
-        #evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
-        print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+        print("Validation:")
+        evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
+        #print("Test:")
+        #evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
         return
 
     # Criterion
