@@ -168,12 +168,13 @@ def main(args):
     #criterion = TripletLoss(margin=args.margin).cuda()
     criterion = nn.CrossEntropyLoss().cuda()
     # base lr rate and embed lr rate
-    base_param_ids = set(map(id, model.base.module.base.parameters()))
-    new_params = [p for p in model.parameters() if
-                  id(p) not in base_param_ids]
+    new_params = [z for z in model.embed]
     param_groups = [
         {'params': model.base.module.base.parameters(), 'lr_mult': 0.1},
-        {'params': new_params, 'lr_mult': 1.0}]
+        {'params': new_params[0].parameters(), 'lr_mult': 1.0},
+        {'params': new_params[1].parameters(), 'lr_mult': 1.0},
+        {'params': new_params[2].parameters(), 'lr_mult': 1.0},
+        {'params': new_params[3].parameters(), 'lr_mult': 1.0}]
 
     # Optimizer
     optimizer = torch.optim.Adam(param_groups, lr=args.lr,
