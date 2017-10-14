@@ -17,7 +17,7 @@ from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
 from reid.loss import TripletLoss
-from reid.trainers import Trainer, RandomWalkTrainer
+from reid.trainers import Trainer, RandomWalkTrainer, RandomWalkGrpTrainer
 from reid.evaluators import Evaluator, CascadeEvaluator
 from reid.utils.data import transforms as T
 from reid.utils.data.preprocessor import Preprocessor
@@ -25,7 +25,7 @@ from reid.utils.data.sampler import RandomIdentitySampler, RandomMultipleGallery
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint, copy_state_dict
 from reid.models.embedding import RandomWalkEmbed
-from reid.models.multi_branch import RandomWalkNet
+from reid.models.multi_branch import RandomWalkNet, RandomWalkNetGrp
 import pdb
 
 def get_data(name, split_id, data_dir, height, width, batch_size, num_instances,
@@ -103,21 +103,33 @@ def main(args):
     base_model = models.create(args.arch, num_features=1024, cut_at_pooling=True,
                           dropout=args.dropout, num_classes=args.features)
 
-    embed_model = RandomWalkEmbed(instances_num=args.num_instances, 
-                            feat_num=2048, num_classes=2)
+    embed_model_1 = RandomWalkEmbed(instances_num=args.num_instances,
+                            feat_num=512, num_classes=2)
+    embed_model_2 = RandomWalkEmbed(instances_num=args.num_instances,
+                                  feat_num=512, num_classes=2)
+    embed_model_3 = RandomWalkEmbed(instances_num=args.num_instances,
+                                  feat_num=512, num_classes=2)
+    embed_model_4 = RandomWalkEmbed(instances_num=args.num_instances,
+                                    feat_num=512, num_classes=2)
 
     if args.retrain:
         print('loading base part of pretrained model...')
         checkpoint = load_checkpoint(args.retrain)
         copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
-        print('loading embed part of pretrained model...')
-        copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
+        # print('loading embed part of pretrained model...')
+        # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
 
     base_model = nn.DataParallel(base_model).cuda()
-    embed_model = embed_model.cuda()
+    embed_model_1 = embed_model_1.cuda()
+    embed_model_2 = embed_model_2.cuda()
+    embed_model_3 = embed_model_3.cuda()
+    embed_model_4 = embed_model_4.cuda()
 
-    model = RandomWalkNet(instances_num=args.num_instances, 
-                        base_model=base_model, embed_model=embed_model)
+    model = RandomWalkNetGrp(instances_num=args.num_instances,
+                        base_model=base_model, embed_model=(embed_model_1,
+                                                            embed_model_2,
+                                                            embed_model_3,
+                                                            embed_model_4))
 
     # Distance metric
     metric = DistanceMetric(algorithm=args.dist_metric)
@@ -136,7 +148,7 @@ def main(args):
     # Evaluator
     evaluator = CascadeEvaluator(
                             base_model,
-                            embed_model, 
+                            (embed_model_1,embed_model_2,embed_model_3,embed_model_4),
                             embed_dist_fn=lambda x: F.softmax(x).data[:, 0])
 
     if args.evaluate:
@@ -162,7 +174,7 @@ def main(args):
 
     # Trainer
     #trainer = Trainer(model, criterion)
-    trainer = RandomWalkTrainer(model, criterion)
+    trainer = RandomWalkGrpTrainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):

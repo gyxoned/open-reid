@@ -19,8 +19,40 @@ cudnn.benchmark = True
 import pdb
 
 
+def compute_random_walk(model, probe_feature, gallery_feature, i):
+    # Compute random walk
+    count = 512
+    outputs = []
+    for j in range(4):
+        p_g_score = model[j](Variable(probe_feature[i].view(1, -1)[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
+                          Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
+        g_g_score = model[j](Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
+                          Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
+        # p_g_score = p_g_score.view(-1, 2)
+        # g_g_score = g_g_score.view(-1, 2)
+        # p_g_score = F.softmax(p_g_score)
+        # g_g_score = F.softmax(g_g_score)
+        # p_g_score = p_g_score.view(1,-1,2)
+        # g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)
+        alpha = 0.8
+        ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
+        one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
+        D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))
+        A = torch.matmul(D, g_g_score[:, :, 1])
+        A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
+        p_g_score[:, :, 1] = torch.matmul(A, p_g_score[:, :, 1].transpose(0, 1).clone()).transpose(0, 1)
+        # p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone()
+        p_g_score = p_g_score.view(-1, 2)
+        p_g_score = p_g_score.contiguous()
+        outputs.append(p_g_score)
+
+    outputs = torch.cat(outputs, 0).view(4, -1 ,2)
+    outputs = torch.mean(outputs, 0)
+    return outputs
+
 def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
-    model.eval()
+    for i in model:
+        i.eval()
 
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -29,42 +61,20 @@ def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_to
     pairwise_score = Variable(torch.zeros(len(query), rerank_topk, 2).cuda())
     probe_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in query], 0)
     for i in range(len(query)):
-      gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
-      
-      #Compute random walk
-      p_g_score = model(Variable(probe_feature[i].view(1 ,-1).cuda(), volatile=True), 
-            Variable(gallery_feature.cuda(), volatile=True))
-      g_g_score = model(Variable(gallery_feature.cuda(), volatile=True), 
-            Variable(gallery_feature.cuda(), volatile=True)) 
-      #p_g_score = p_g_score.view(-1, 2)
-      #g_g_score = g_g_score.view(-1, 2)
-      #p_g_score = F.softmax(p_g_score)
-      #g_g_score = F.softmax(g_g_score)
-      #p_g_score = p_g_score.view(1,-1,2)
-      #g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)  
-      alpha = 0.8
-      ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
-      one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
-      D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))
-      A = torch.matmul(D, g_g_score[:,:,1])
-      A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
-      p_g_score[:,:,1] = torch.matmul(A, p_g_score[:,:,1].transpose(0,1).clone()).transpose(0,1)
-      #p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone() 
-      p_g_score = p_g_score.view(-1, 2)
-      p_g_score = p_g_score.contiguous() 
-      pairwise_score[i, : , :] = p_g_score
+        gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
+        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i)
 
-      batch_time.update(time.time() - end)
-      end = time.time()
+        batch_time.update(time.time() - end)
+        end = time.time()
 
-      if (i + 1) % print_freq == 0:
+        if (i + 1) % print_freq == 0:
          print('Extract Embedding: [{}/{}]\t'
                'Time {:.3f} ({:.3f})\t'
                'Data {:.3f} ({:.3f})\t'.format(
                i + 1, len(query),
                batch_time.val, batch_time.avg,
                data_time.val, data_time.avg))
-    
+
     return torch.cat(pairwise_score)
 
 
@@ -211,8 +221,7 @@ class CascadeEvaluator(object):
                 gallery_fname_id_pid = gallery[j]
                 topk_gallery[i].append(gallery_fname_id_pid)
 
-       
-        embeddings = extract_embeddings(self.embed_model, features, 
+        embeddings = extract_embeddings(self.embed_model, features,
                                 query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
 
         if self.embed_dist_fn is not None:
