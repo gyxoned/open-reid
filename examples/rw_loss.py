@@ -103,7 +103,7 @@ def main(args):
     base_model = models.create(args.arch, num_features=1024, cut_at_pooling=True,
                           dropout=args.dropout, num_classes=args.features)
 
-    grp_num = 4
+    grp_num = 8
     embed_model = [RandomWalkEmbed(instances_num=args.num_instances,
                             feat_num=(2048 / grp_num), num_classes=2).cuda() for i in range(grp_num)]
 
@@ -185,7 +185,7 @@ def main(args):
     # Start training
     for epoch in range(start_epoch, args.epochs):
         lr = adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer, lr)
+        trainer.train(epoch, train_loader, optimizer, lr, warm_up=False)
         top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, second_stage=False)
 
         #is_best = top1 > best_top1

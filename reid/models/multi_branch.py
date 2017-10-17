@@ -7,7 +7,7 @@ import pdb
 
 def random_walk_compute(p_g_score, g_g_score):
     # Random Walk Computation
-    alpha = 0.9
+    alpha = 0.0
     ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
     one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
     D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))

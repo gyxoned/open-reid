@@ -18,7 +18,7 @@ class BaseTrainer(object):
         self.num_classes = num_classes
         self.num_instances = num_instances
 
-    def train(self, epoch, data_loader, optimizer, base_lr, print_freq=1):
+    def train(self, epoch, data_loader, optimizer, base_lr, warm_up=True, print_freq=1):
         self.model.train()
 
         batch_time = AverageMeter()
@@ -38,16 +38,16 @@ class BaseTrainer(object):
 
             losses.update(loss.data[0], targets.size(0))
             precisions.update(prec1, targets.size(0))
-            
-            if epoch <= (warm_up):
-                lr = (base_lr / warm_iters) + (epoch*len(data_loader) +(i+1))*(base_lr / warm_iters)
-                print(lr)
-                for g in optimizer.param_groups:
-                    g['lr'] = lr * g.get('lr_mult', 1)
-            else:
-                lr = base_lr
-                for g in optimizer.param_groups:
-                    g['lr'] = lr * g.get('lr_mult', 1)
+            if warm_up: 
+                if epoch <= (warm_up):
+                    lr = (base_lr / warm_iters) + (epoch*len(data_loader) +(i+1))*(base_lr / warm_iters)
+                    print(lr)
+                    for g in optimizer.param_groups:
+                        g['lr'] = lr * g.get('lr_mult', 1)
+                else:
+                    lr = base_lr
+                    for g in optimizer.param_groups:
+                        g['lr'] = lr * g.get('lr_mult', 1)
 
             optimizer.zero_grad()
             loss.backward()
@@ -157,7 +157,7 @@ class RandomWalkGrpTrainer(BaseTrainer):
         for j in range(int(targets.size(0) / self.num_instances), targets.size(0)):
             pairwise_targets[j] = (gallery_targets[j - int(targets.size(0) / self.num_instances)] == gallery_targets).long()
         pairwise_targets = pairwise_targets.view(-1).long()
-        pairwise_targets = pairwise_targets.repeat(4)
+        pairwise_targets = pairwise_targets.repeat(8)
         outputs = self.model(*inputs)
 
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
