@@ -112,13 +112,6 @@ def main(args):
     embed_model_4 = RandomWalkEmbed(instances_num=args.num_instances,
                                     feat_num=512, num_classes=2)
 
-    if args.retrain:
-        print('loading base part of pretrained model...')
-        checkpoint = load_checkpoint(args.retrain)
-        copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
-        # print('loading embed part of pretrained model...')
-        # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
-
     base_model = nn.DataParallel(base_model).cuda()
     embed_model_1 = embed_model_1.cuda()
     embed_model_2 = embed_model_2.cuda()
@@ -130,6 +123,18 @@ def main(args):
                                                             embed_model_2,
                                                             embed_model_3,
                                                             embed_model_4))
+
+    if args.retrain:
+        if args.evaluate_from:
+            print('loading trained model...')
+            checkpoint = load_checkpoint(args.evaluate_from)
+            model.load_state_dict(checkpoint['state_dict'])
+        else:
+            print('loading base part of pretrained model...')
+            checkpoint = load_checkpoint(args.retrain)
+            copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
+            # print('loading embed part of pretrained model...')
+            # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
 
     # Distance metric
     metric = DistanceMetric(algorithm=args.dist_metric)
@@ -158,10 +163,10 @@ def main(args):
             checkpoint = load_checkpoint(args.evaluate_from)
             model.load_state_dict(checkpoint['state_dict'])
 
-        print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
-        #print("Test:")
-        #evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+        #print("Validation:")
+        #evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
+        print("Test:")
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
         return
 
     # Criterion
@@ -170,7 +175,7 @@ def main(args):
     # base lr rate and embed lr rate
     new_params = [z for z in model.embed]
     param_groups = [
-        {'params': model.base.module.base.parameters(), 'lr_mult': 0.1},
+        {'params': model.base.module.base.parameters(), 'lr_mult': 1},
         {'params': new_params[0].parameters(), 'lr_mult': 1.0},
         {'params': new_params[1].parameters(), 'lr_mult': 1.0},
         {'params': new_params[2].parameters(), 'lr_mult': 1.0},
@@ -190,12 +195,13 @@ def main(args):
         lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
+        return lr
 
     # Start training
     for epoch in range(start_epoch, args.epochs):
-        adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer)
-        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        lr = adjust_lr(epoch)
+        trainer.train(epoch, train_loader, optimizer, lr)
+        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, second_stage=False)
 
         #is_best = top1 > best_top1
         #best_top1 = max(top1, best_top1)

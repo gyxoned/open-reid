@@ -7,7 +7,7 @@ import pdb
 
 def random_walk_compute(p_g_score, g_g_score):
     # Random Walk Computation
-    alpha = 0.5
+    alpha = 0.9
     ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
     one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
     D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))
@@ -69,7 +69,10 @@ class RandomWalkNetGrp(nn.Module):
         self.instances_num = instances_num
         self.base = base_model
         self.embed = embed_model
-        self.topk = 10
+        self.embed_0 = embed_model[0]
+        self.embed_1 = embed_model[1]
+        self.embed_2 = embed_model[2]
+        self.embed_3 = embed_model[3]
 
     def forward(self, x):
         x = self.base(x)

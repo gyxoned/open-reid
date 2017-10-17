@@ -19,7 +19,7 @@ cudnn.benchmark = True
 import pdb
 
 
-def compute_random_walk(model, probe_feature, gallery_feature, i):
+def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
     # Compute random walk
     count = 512
     outputs = []
@@ -28,26 +28,27 @@ def compute_random_walk(model, probe_feature, gallery_feature, i):
                           Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
         g_g_score = model[j](Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
                           Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
-        # p_g_score = p_g_score.view(-1, 2)
-        # g_g_score = g_g_score.view(-1, 2)
-        # p_g_score = F.softmax(p_g_score)
-        # g_g_score = F.softmax(g_g_score)
-        # p_g_score = p_g_score.view(1,-1,2)
-        # g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)
-        alpha = 0.8
+        p_g_score = p_g_score.view(-1, 2)
+        g_g_score = g_g_score.view(-1, 2)
+        p_g_score = F.softmax(p_g_score)
+        g_g_score = F.softmax(g_g_score)
+        p_g_score = p_g_score.view(1,-1,2)
+        g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)
+        alpha = 0.32
         ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
         one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
         D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))
         A = torch.matmul(D, g_g_score[:, :, 1])
         A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
         p_g_score[:, :, 1] = torch.matmul(A, p_g_score[:, :, 1].transpose(0, 1).clone()).transpose(0, 1)
-        # p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone()
+        p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone()
         p_g_score = p_g_score.view(-1, 2)
         p_g_score = p_g_score.contiguous()
         outputs.append(p_g_score)
 
     outputs = torch.cat(outputs, 0).view(4, -1 ,2)
     outputs = torch.mean(outputs, 0)
+    #outputs = outputs[1].view(-1 ,2)
     return outputs
 
 def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
@@ -62,7 +63,7 @@ def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_to
     probe_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in query], 0)
     for i in range(len(query)):
         gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
-        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i)
+        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk)
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -201,41 +202,42 @@ class CascadeEvaluator(object):
         self.embed_dist_fn = embed_dist_fn
 
     def evaluate(self, data_loader, query, gallery, cache_file=None,
-                 rerank_topk=300):
+                 rerank_topk=75, second_stage=True):
         # Extract features image by image
         features, _ = extract_features(self.base_model, data_loader)
 
         # Compute pairwise distance and evaluate for the first stage
         distmat = pairwise_distance(features, query, gallery)
         print("First stage evaluation:")
-        evaluate_all(distmat, query=query, gallery=gallery)
-
-        # Sort according to the first stage distance
-        distmat = to_numpy(distmat)
-        rank_indices = np.argsort(distmat, axis=1)
-        
-        # Build a data loader for topk predictions for each query
-        topk_gallery = [[] for i in range(len(query))]
-        for i, indices in enumerate(rank_indices):
-            for j in indices[:rerank_topk]:
-                gallery_fname_id_pid = gallery[j]
-                topk_gallery[i].append(gallery_fname_id_pid)
-
-        embeddings = extract_embeddings(self.embed_model, features,
-                                query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
-
-        if self.embed_dist_fn is not None:
-            #embeddings = embeddings[:, 0].data
-            embeddings = self.embed_dist_fn(embeddings)
-
-        # Merge two-stage distances
-        for k, embed in enumerate(embeddings):
-            i, j = k // rerank_topk, k % rerank_topk
-            distmat[i, rank_indices[i, j]] = embed
-        for i, indices in enumerate(rank_indices):
-            bar = max(distmat[i][indices[:rerank_topk]])
-            gap = max(bar + 1. - distmat[i, indices[rerank_topk]], 0)
-            if gap > 0:
-                distmat[i][indices[rerank_topk:]] += gap
-        print("Second stage evaluation:")
+        if second_stage:
+            evaluate_all(distmat, query=query, gallery=gallery)
+    
+            # Sort according to the first stage distance
+            distmat = to_numpy(distmat)
+            rank_indices = np.argsort(distmat, axis=1)
+            
+            # Build a data loader for topk predictions for each query
+            topk_gallery = [[] for i in range(len(query))]
+            for i, indices in enumerate(rank_indices):
+                for j in indices[:rerank_topk]:
+                    gallery_fname_id_pid = gallery[j]
+                    topk_gallery[i].append(gallery_fname_id_pid)
+    
+            embeddings = extract_embeddings(self.embed_model, features,
+                                    query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
+    
+            if self.embed_dist_fn is not None:
+                embeddings = embeddings[:, 0].data
+                #embeddings = self.embed_dist_fn(embeddings)
+    
+            # Merge two-stage distances
+            for k, embed in enumerate(embeddings):
+                i, j = k // rerank_topk, k % rerank_topk
+                distmat[i, rank_indices[i, j]] = embed
+            for i, indices in enumerate(rank_indices):
+                bar = max(distmat[i][indices[:rerank_topk]])
+                gap = max(bar + 1. - distmat[i, indices[rerank_topk]], 0)
+                if gap > 0:
+                    distmat[i][indices[rerank_topk:]] += gap
+            print("Second stage evaluation:")
         return evaluate_all(distmat, query, gallery)

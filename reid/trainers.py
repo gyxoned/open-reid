@@ -18,13 +18,16 @@ class BaseTrainer(object):
         self.num_classes = num_classes
         self.num_instances = num_instances
 
-    def train(self, epoch, data_loader, optimizer, print_freq=1):
+    def train(self, epoch, data_loader, optimizer, base_lr, print_freq=1):
         self.model.train()
 
         batch_time = AverageMeter()
         data_time = AverageMeter()
         losses = AverageMeter()
         precisions = AverageMeter()
+        
+        warm_up = 20
+        warm_iters = float(len(data_loader) * warm_up)
 
         end = time.time()
         for i, inputs in enumerate(data_loader):
@@ -35,6 +38,16 @@ class BaseTrainer(object):
 
             losses.update(loss.data[0], targets.size(0))
             precisions.update(prec1, targets.size(0))
+            
+            if epoch <= (warm_up):
+                lr = (base_lr / warm_iters) + (epoch*len(data_loader) +(i+1))*(base_lr / warm_iters)
+                print(lr)
+                for g in optimizer.param_groups:
+                    g['lr'] = lr * g.get('lr_mult', 1)
+            else:
+                lr = base_lr
+                for g in optimizer.param_groups:
+                    g['lr'] = lr * g.get('lr_mult', 1)
 
             optimizer.zero_grad()
             loss.backward()
