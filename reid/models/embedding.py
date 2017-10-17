@@ -12,6 +12,8 @@ class RandomWalkEmbed(nn.Module):
         self.instances_num = instances_num
         self.feat_num = feat_num
         self.bn = nn.BatchNorm1d(feat_num)
+        self.bn.weight.data.fill_(1)
+        self.bn.bias.data.zero_()
         self.classifier = nn.Linear(feat_num, num_classes)
         self.classifier.weight.data.normal_(0, 0.001)
         self.classifier.bias.data.zero_()

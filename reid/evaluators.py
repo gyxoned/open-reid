@@ -21,9 +21,9 @@ import pdb
 
 def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
     # Compute random walk
-    count = 512
+    count = 2048 / (len(model))
     outputs = []
-    for j in range(4):
+    for j in range(len(model)):
         p_g_score = model[j](Variable(probe_feature[i].view(1, -1)[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
                           Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
         g_g_score = model[j](Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
@@ -46,7 +46,7 @@ def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
         p_g_score = p_g_score.contiguous()
         outputs.append(p_g_score)
 
-    outputs = torch.cat(outputs, 0).view(4, -1 ,2)
+    outputs = torch.cat(outputs, 0).view(len(model), -1 ,2)
     outputs = torch.mean(outputs, 0)
     #outputs = outputs[1].view(-1 ,2)
     return outputs

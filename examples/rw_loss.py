@@ -103,26 +103,14 @@ def main(args):
     base_model = models.create(args.arch, num_features=1024, cut_at_pooling=True,
                           dropout=args.dropout, num_classes=args.features)
 
-    embed_model_1 = RandomWalkEmbed(instances_num=args.num_instances,
-                            feat_num=512, num_classes=2)
-    embed_model_2 = RandomWalkEmbed(instances_num=args.num_instances,
-                                  feat_num=512, num_classes=2)
-    embed_model_3 = RandomWalkEmbed(instances_num=args.num_instances,
-                                  feat_num=512, num_classes=2)
-    embed_model_4 = RandomWalkEmbed(instances_num=args.num_instances,
-                                    feat_num=512, num_classes=2)
+    grp_num = 4
+    embed_model = [RandomWalkEmbed(instances_num=args.num_instances,
+                            feat_num=(2048 / grp_num), num_classes=2).cuda() for i in range(grp_num)]
 
     base_model = nn.DataParallel(base_model).cuda()
-    embed_model_1 = embed_model_1.cuda()
-    embed_model_2 = embed_model_2.cuda()
-    embed_model_3 = embed_model_3.cuda()
-    embed_model_4 = embed_model_4.cuda()
 
     model = RandomWalkNetGrp(instances_num=args.num_instances,
-                        base_model=base_model, embed_model=(embed_model_1,
-                                                            embed_model_2,
-                                                            embed_model_3,
-                                                            embed_model_4))
+                        base_model=base_model, embed_model=embed_model)
 
     if args.retrain:
         if args.evaluate_from:
@@ -153,7 +141,7 @@ def main(args):
     # Evaluator
     evaluator = CascadeEvaluator(
                             base_model,
-                            (embed_model_1,embed_model_2,embed_model_3,embed_model_4),
+                            embed_model,
                             embed_dist_fn=lambda x: F.softmax(x).data[:, 0])
 
     if args.evaluate:
@@ -163,8 +151,8 @@ def main(args):
             checkpoint = load_checkpoint(args.evaluate_from)
             model.load_state_dict(checkpoint['state_dict'])
 
-        #print("Validation:")
-        #evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
+        # print("Validation:")
+        # evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
         print("Test:")
         evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
         return
@@ -175,11 +163,8 @@ def main(args):
     # base lr rate and embed lr rate
     new_params = [z for z in model.embed]
     param_groups = [
-        {'params': model.base.module.base.parameters(), 'lr_mult': 1},
-        {'params': new_params[0].parameters(), 'lr_mult': 1.0},
-        {'params': new_params[1].parameters(), 'lr_mult': 1.0},
-        {'params': new_params[2].parameters(), 'lr_mult': 1.0},
-        {'params': new_params[3].parameters(), 'lr_mult': 1.0}]
+        {'params': model.base.module.base.parameters(), 'lr_mult': 0.1}] + \
+        [{'params': new_params[i].parameters(), 'lr_mult': 1.0} for i in range(grp_num)]
 
     # Optimizer
     optimizer = torch.optim.Adam(param_groups, lr=args.lr,

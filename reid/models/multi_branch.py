@@ -69,10 +69,8 @@ class RandomWalkNetGrp(nn.Module):
         self.instances_num = instances_num
         self.base = base_model
         self.embed = embed_model
-        self.embed_0 = embed_model[0]
-        self.embed_1 = embed_model[1]
-        self.embed_2 = embed_model[2]
-        self.embed_3 = embed_model[3]
+        for i in range(len(embed_model)):
+            setattr(self, 'embed_'+str(i), embed_model[i])
 
     def forward(self, x):
         x = self.base(x)
@@ -85,9 +83,9 @@ class RandomWalkNetGrp(nn.Module):
         gallery_x = x[:, 1:self.instances_num, :]
         gallery_x = gallery_x.contiguous()
         gallery_x = gallery_x.view(-1, C)
-        count = 512
+        count = 2048 / (len(self.embed))
         outputs = []
-        for i in range(4):
+        for i in range(len(self.embed)):
             p_g_score = self.embed[i](probe_x[:,i*count:(i+1)*count].contiguous(),
                                       gallery_x[:,i*count:(i+1)*count].contiguous())
             g_g_score = self.embed[i](gallery_x[:,i*count:(i+1)*count].contiguous(),
