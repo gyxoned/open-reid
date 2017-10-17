@@ -26,8 +26,8 @@ class BaseTrainer(object):
         losses = AverageMeter()
         precisions = AverageMeter()
         
-        warm_up = 20
-        warm_iters = float(len(data_loader) * warm_up)
+        warm_up_ep = 20
+        warm_iters = float(len(data_loader) * warm_up_ep)
 
         end = time.time()
         for i, inputs in enumerate(data_loader):
@@ -39,7 +39,7 @@ class BaseTrainer(object):
             losses.update(loss.data[0], targets.size(0))
             precisions.update(prec1, targets.size(0))
             if warm_up: 
-                if epoch <= (warm_up):
+                if epoch <= (warm_up_ep):
                     lr = (base_lr / warm_iters) + (epoch*len(data_loader) +(i+1))*(base_lr / warm_iters)
                     print(lr)
                     for g in optimizer.param_groups:

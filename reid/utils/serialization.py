@@ -42,7 +42,7 @@ def copy_state_dict(state_dict, model, strip=None):
     copied_names = set()
     for name, param in state_dict.items():
         if strip is not None and name.startswith(strip):
-            name = name.replace(strip, "")
+            name = name.replace(strip, "module.")
         if name not in tgt_state:
             print('missing target keys in model:', name)
             continue
