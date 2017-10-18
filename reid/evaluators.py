@@ -223,8 +223,8 @@ class CascadeEvaluator(object):
                                     query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
     
             if self.embed_dist_fn is not None:
-                embeddings = embeddings[:, 0].data
-                #embeddings = self.embed_dist_fn(embeddings)
+                # embeddings = embeddings[:, 0].data
+                embeddings = self.embed_dist_fn(embeddings)
     
             # Merge two-stage distances
             for k, embed in enumerate(embeddings):
