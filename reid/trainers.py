@@ -11,12 +11,14 @@ from .utils.meters import AverageMeter
 
 
 class BaseTrainer(object):
-    def __init__(self, model, criterion, num_classes=0, num_instances=4):
+    def __init__(self, model, criterion, alpha, grp_num, num_classes=0, num_instances=4):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.num_classes = num_classes
         self.num_instances = num_instances
+        self.alpha = alpha
+        self.grp_num = grp_num
 
     def train(self, epoch, data_loader, optimizer, base_lr, warm_up=True, print_freq=1):
         self.model.train()
@@ -157,7 +159,7 @@ class RandomWalkGrpTrainer(BaseTrainer):
         for j in range(int(targets.size(0) / self.num_instances), targets.size(0)):
             pairwise_targets[j] = (gallery_targets[j - int(targets.size(0) / self.num_instances)] == gallery_targets).long()
         pairwise_targets = pairwise_targets.view(-1).long()
-        pairwise_targets = pairwise_targets.repeat(8)
+        pairwise_targets = pairwise_targets.repeat(self.grp_num)
         outputs = self.model(*inputs)
 
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):

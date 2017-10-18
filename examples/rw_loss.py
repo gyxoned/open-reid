@@ -110,7 +110,7 @@ def main(args):
     base_model = nn.DataParallel(base_model).cuda()
 
     model = RandomWalkNetGrp(instances_num=args.num_instances,
-                        base_model=base_model, embed_model=embed_model)
+                        base_model=base_model, embed_model=embed_model, alpha=args.alpha)
 
     if args.retrain:
         if args.evaluate_from:
@@ -172,7 +172,7 @@ def main(args):
 
     # Trainer
     #trainer = Trainer(model, criterion)
-    trainer = RandomWalkGrpTrainer(model, criterion)
+    trainer = RandomWalkGrpTrainer(model, criterion, args.alpha, grp_num)
 
     # Schedule learning rate
     def adjust_lr(epoch):
@@ -186,7 +186,7 @@ def main(args):
     for epoch in range(start_epoch, args.epochs):
         lr = adjust_lr(epoch)
         trainer.train(epoch, train_loader, optimizer, lr, warm_up=False)
-        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, second_stage=False)
+        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, second_stage=False)
 
         #is_best = top1 > best_top1
         #best_top1 = max(top1, best_top1)
@@ -206,7 +206,7 @@ def main(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
     metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric)
 
 
 if __name__ == '__main__':
@@ -252,6 +252,7 @@ if __name__ == '__main__':
                         help="evaluation only")
     parser.add_argument('--evaluate-from', type=str, default='', metavar='PATH')
     parser.add_argument('--epochs', type=int, default=150)
+    parser.add_argument('--alpha', type=float, default=0.1)
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--print-freq', type=int, default=1)
     # metric learning

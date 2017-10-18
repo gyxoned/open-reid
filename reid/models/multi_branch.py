@@ -5,13 +5,15 @@ from torch.autograd import Variable
 import pdb
 
 
-def random_walk_compute(p_g_score, g_g_score):
+def random_walk_compute(p_g_score, g_g_score, alpha):
     # Random Walk Computation
-    alpha = 0.0
     ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
     one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
-    D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))
-    A = torch.matmul(D, g_g_score[:, :, 1])
+    g_g_score_sm = g_g_score.view(-1, 2).clone()
+    g_g_score_sm = F.softmax(g_g_score_sm)
+    g_g_score_sm = g_g_score_sm.view(g_g_score.size()[0], g_g_score.size()[1], 2)
+    D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score_sm[:, :, 1], 1))
+    A = torch.matmul(D, g_g_score_sm[:, :, 1])
     A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
     A = A.transpose(0, 1)
     p_g_score[:, :, 1] = torch.matmul(p_g_score[:, :, 1].clone(), A)
@@ -64,9 +66,10 @@ class RandomWalkNet(nn.Module):
 
 
 class RandomWalkNetGrp(nn.Module):
-    def __init__(self, instances_num=4, base_model=None, embed_model=None):
+    def __init__(self, instances_num=4, base_model=None, embed_model=None, alpha=0.1):
         super(RandomWalkNetGrp, self).__init__()
         self.instances_num = instances_num
+        self.alpha = alpha
         self.base = base_model
         self.embed = embed_model
         for i in range(len(embed_model)):
@@ -91,7 +94,7 @@ class RandomWalkNetGrp(nn.Module):
             g_g_score = self.embed[i](gallery_x[:,i*count:(i+1)*count].contiguous(),
                                       gallery_x[:,i*count:(i+1)*count].contiguous())
 
-            outputs.append(random_walk_compute(p_g_score, g_g_score))
+            outputs.append(random_walk_compute(p_g_score, g_g_score, self.alpha))
 
         outputs = torch.cat(outputs, 0)
         return outputs

@@ -19,7 +19,7 @@ cudnn.benchmark = True
 import pdb
 
 
-def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
+def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, alpha):
     # Compute random walk
     count = 2048 / (len(model))
     outputs = []
@@ -28,20 +28,16 @@ def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
                           Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
         g_g_score = model[j](Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True),
                           Variable(gallery_feature[:,j*count:(j+1)*count].contiguous().cuda(), volatile=True))
-        p_g_score = p_g_score.view(-1, 2)
-        g_g_score = g_g_score.view(-1, 2)
-        p_g_score = F.softmax(p_g_score)
-        g_g_score = F.softmax(g_g_score)
-        p_g_score = p_g_score.view(1,-1,2)
-        g_g_score = g_g_score.view(rerank_topk, rerank_topk, 2)
-        alpha = 0.32
-        ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
-        one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
-        D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:, :, 1], 1))
-        A = torch.matmul(D, g_g_score[:, :, 1])
+        g_g_score_sm = g_g_score.view(-1, 2).clone()
+        g_g_score_sm = F.softmax(g_g_score_sm)
+        g_g_score_sm = g_g_score_sm.view(rerank_topk, rerank_topk, 2)
+        ones = Variable(torch.ones(g_g_score_sm.size()[:2]), requires_grad=False).cuda()
+        one_diag = Variable(torch.eye(g_g_score_sm.size(0)), requires_grad=False).cuda()
+        D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score_sm[:, :, 1], 1))
+        A = torch.matmul(D, g_g_score_sm[:, :, 1])
         A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
-        p_g_score[:, :, 1] = torch.matmul(A, p_g_score[:, :, 1].transpose(0, 1).clone()).transpose(0, 1)
-        p_g_score[:,:,0] = 1.0 - p_g_score[:,:,1].clone()
+        A = A.transpose(0, 1)
+        p_g_score[:, :, 1] = torch.matmul(p_g_score[:, :, 1].clone(), A)
         p_g_score = p_g_score.view(-1, 2)
         p_g_score = p_g_score.contiguous()
         outputs.append(p_g_score)
@@ -51,7 +47,7 @@ def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk):
     #outputs = outputs[1].view(-1 ,2)
     return outputs
 
-def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
+def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
     for i in model:
         i.eval()
 
@@ -63,7 +59,7 @@ def extract_embeddings(model, features, query=None, topk_gallery=None, rerank_to
     probe_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in query], 0)
     for i in range(len(query)):
         gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
-        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk)
+        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, alpha)
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -201,7 +197,7 @@ class CascadeEvaluator(object):
         self.embed_model = embed_model
         self.embed_dist_fn = embed_dist_fn
 
-    def evaluate(self, data_loader, query, gallery, cache_file=None,
+    def evaluate(self, data_loader, query, gallery, alpha, cache_file=None,
                  rerank_topk=75, second_stage=True):
         # Extract features image by image
         features, _ = extract_features(self.base_model, data_loader)
@@ -223,7 +219,7 @@ class CascadeEvaluator(object):
                     gallery_fname_id_pid = gallery[j]
                     topk_gallery[i].append(gallery_fname_id_pid)
     
-            embeddings = extract_embeddings(self.embed_model, features,
+            embeddings = extract_embeddings(self.embed_model, features, alpha,
                                     query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
     
             if self.embed_dist_fn is not None:
