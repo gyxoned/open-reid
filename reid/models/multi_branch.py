@@ -7,16 +7,14 @@ import pdb
 
 def random_walk_compute(p_g_score, g_g_score, alpha):
     # Random Walk Computation
-    ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
-    one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
-    g_g_score_sm = g_g_score.view(-1, 2).clone()
-    g_g_score_sm = F.softmax(g_g_score_sm)
-    g_g_score_sm = g_g_score_sm.view(g_g_score.size()[0], g_g_score.size()[1], 2)
-    D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score_sm[:, :, 1], 1))
-    A = torch.matmul(D, g_g_score_sm[:, :, 1])
+    one_diag = Variable(torch.eye(g_g_score.size(0)).cuda(), requires_grad=False)
+    g_g_score_sm = Variable(g_g_score.data.clone(), requires_grad=False)
+    # Row Normalization
+    A = F.softmax(g_g_score_sm[:, :, 1].squeeze())
     A = (1 - alpha) * torch.inverse(one_diag - alpha * A)
     A = A.transpose(0, 1)
-    p_g_score[:, :, 1] = torch.matmul(p_g_score[:, :, 1].clone(), A)
+    p_g_score = torch.matmul(p_g_score.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
+    g_g_score = torch.matmul(g_g_score.permute(2, 0, 1), A).permute(1, 2, 0).contiguous()
     p_g_score = p_g_score.view(-1, 2)
     g_g_score = g_g_score.view(-1, 2)
     outputs = torch.cat((p_g_score, g_g_score), 0)
