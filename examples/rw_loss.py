@@ -163,8 +163,8 @@ def main(args):
     # base lr rate and embed lr rate
     new_params = [z for z in model.embed]
     param_groups = [
-        {'params': model.base.module.base.parameters(), 'lr_mult': 0.1}] + \
-        [{'params': new_params[i].parameters(), 'lr_mult': 1.0} for i in range(grp_num)]
+        {'params': model.base.module.base.parameters(), 'lr_mult': 1.0}] + \
+        [{'params': new_params[i].parameters(), 'lr_mult': 10.0} for i in range(grp_num)]
 
     # Optimizer
     optimizer = torch.optim.Adam(param_groups, lr=args.lr,
