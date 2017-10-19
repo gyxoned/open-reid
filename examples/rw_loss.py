@@ -103,7 +103,7 @@ def main(args):
     base_model = models.create(args.arch, num_features=1024, cut_at_pooling=True,
                           dropout=args.dropout, num_classes=args.features)
 
-    grp_num = 8
+    grp_num = args.grp_num
     embed_model = [RandomWalkEmbed(instances_num=args.num_instances,
                             feat_num=(2048 / grp_num), num_classes=2).cuda() for i in range(grp_num)]
 
@@ -236,6 +236,7 @@ if __name__ == '__main__':
                         choices=models.names())
     parser.add_argument('--features', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0)
+    parser.add_argument('--grp-num', type=float, default=1)
     # loss
     parser.add_argument('--margin', type=float, default=0.5,
                         help="margin of the triplet loss, default: 0.5")
