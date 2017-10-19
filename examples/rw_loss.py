@@ -152,9 +152,9 @@ def main(args):
             model.load_state_dict(checkpoint['state_dict'])
 
         print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, metric)
+        evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, metric, rerank_topk=args.rerank)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank)
         return
 
     # Criterion
@@ -206,7 +206,7 @@ def main(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
     metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank)
 
 
 if __name__ == '__main__':
@@ -236,7 +236,8 @@ if __name__ == '__main__':
                         choices=models.names())
     parser.add_argument('--features', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0)
-    parser.add_argument('--grp-num', type=float, default=1)
+    parser.add_argument('--grp-num', type=int, default=1)
+    parser.add_argument('--rerank', type=int, default=75)
     # loss
     parser.add_argument('--margin', type=float, default=0.5,
                         help="margin of the triplet loss, default: 0.5")
