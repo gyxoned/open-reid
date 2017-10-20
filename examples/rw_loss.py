@@ -42,7 +42,8 @@ def get_data(name, split_id, data_dir, height, width, batch_size, num_instances,
                    else dataset.num_train_ids)
 
     train_transformer = T.Compose([
-        T.RandomSizedRectCrop(height, width),
+        T.RectScale(height, width),
+        T.RandomSizedEarser(),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,

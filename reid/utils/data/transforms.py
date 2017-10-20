@@ -46,7 +46,7 @@ class RandomSizedRectCrop(object):
         return scale(img)
 
 
-class  RandomSizedEarser(object):
+class RandomSizedEarser(object):
     def __init__(self, sl=0.02, sh=0.2, asratio=0.3, p=0.5):
         self.sl = sl
         self.sh = sh
