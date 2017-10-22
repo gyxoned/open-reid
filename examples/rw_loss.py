@@ -153,9 +153,9 @@ def main(args):
             model.load_state_dict(checkpoint['state_dict'])
 
         print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, metric, rerank_topk=args.rerank)
+        evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, metric, rerank_topk=args.rerank, dataset=args.dataset)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank, dataset=args.dataset)
         return
 
     # Criterion
@@ -187,7 +187,7 @@ def main(args):
     for epoch in range(start_epoch, args.epochs):
         lr = adjust_lr(epoch)
         trainer.train(epoch, train_loader, optimizer, lr, warm_up=False)
-        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, second_stage=False)
+        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, args.alpha, second_stage=False, dataset=args.dataset)
 
         #is_best = top1 > best_top1
         #best_top1 = max(top1, best_top1)
@@ -207,7 +207,7 @@ def main(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
     metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, args.alpha, metric, rerank_topk=args.rerank, dataset=args.dataset)
 
 
 if __name__ == '__main__':
