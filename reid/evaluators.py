@@ -145,7 +145,7 @@ def evaluate_all(distmat, query=None, gallery=None,
     print('Mean AP: {:4.1%}'.format(mAP))
 
     # Compute all kinds of CMC scores
-    if dataset == ('market1501' or 'dukemtmc'):
+    if (dataset == 'market1501') or (dataset == 'dukemtmc'):
         cmc_configs = {
             'market1501': dict(separate_camera_set=False,
                                single_gallery_shot=False,
