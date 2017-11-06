@@ -121,7 +121,7 @@ def main(args):
         else:
             print('loading base part of pretrained model...')
             checkpoint = load_checkpoint(args.retrain)
-            copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
+            copy_state_dict(checkpoint['state_dict'], base_model, strip='base.module.')
             # print('loading embed part of pretrained model...')
             # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
 
