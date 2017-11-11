@@ -7,7 +7,7 @@ import pdb
 
 
 class RandomWalkEmbed(nn.Module):
-    def __init__(self, instances_num=4, feat_num=2048, num_classes=0):
+    def __init__(self, instances_num=4, feat_num=2048, num_classes=0, drop_ratio=0.5):
         super(RandomWalkEmbed, self).__init__()
         self.instances_num = instances_num
         self.feat_num = feat_num
@@ -17,6 +17,7 @@ class RandomWalkEmbed(nn.Module):
         self.classifier = nn.Linear(feat_num, num_classes)
         self.classifier.weight.data.normal_(0, 0.001)
         self.classifier.bias.data.zero_()
+	self.drop = nn.Dropout(drop_ratio)
         
 
     def forward(self, probe_x, gallery_x):
@@ -37,6 +38,7 @@ class RandomWalkEmbed(nn.Module):
         diff = diff.view(N_probe * N_gallery, -1)
         diff = diff.contiguous()
         bn_diff = self.bn(diff)
+	bn_diff = self.drop(bn_diff)
 
         cls_encode = self.classifier(bn_diff)
         cls_encode = cls_encode.view(N_probe, N_gallery, -1)

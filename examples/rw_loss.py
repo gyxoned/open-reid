@@ -106,7 +106,7 @@ def main(args):
 
     grp_num = args.grp_num
     embed_model = [RandomWalkEmbed(instances_num=args.num_instances,
-                            feat_num=(2048 / grp_num), num_classes=2).cuda() for i in range(grp_num)]
+                            feat_num=(2048 / grp_num), num_classes=2, drop_ratio=args.dropout).cuda() for i in range(grp_num)]
 
     base_model = nn.DataParallel(base_model).cuda()
 
@@ -121,7 +121,8 @@ def main(args):
         else:
             print('loading base part of pretrained model...')
             checkpoint = load_checkpoint(args.retrain)
-            copy_state_dict(checkpoint['state_dict'], base_model, strip='base.module.')
+            #copy_state_dict(checkpoint['state_dict'], base_model, strip='base.module.')
+            copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
             # print('loading embed part of pretrained model...')
             # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
 
