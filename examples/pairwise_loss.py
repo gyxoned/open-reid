@@ -33,7 +33,7 @@ import pickle
 
 
 
-def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trainval):
+def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trainval, np_ratio):
     root = osp.join(data_dir, dataset_name)
 
     dataset = create(dataset_name, root,
@@ -53,7 +53,7 @@ def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trai
                          transforms.ToTensor(),
                          normalizer,
                      ])),
-        sampler=RandomPairSampler(train_set, neg_pos_ratio=4),
+        sampler=RandomPairSampler(train_set, neg_pos_ratio=np_ratio),
         batch_size=batch_size, num_workers=workers, pin_memory=False)
 
     val_loader = DataLoader(
@@ -94,7 +94,7 @@ def main(args):
     # Create data loaders
     dataset, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir,
-                 args.batch_size, args.workers, args.combine_trainval)
+                 args.batch_size, args.workers, args.combine_trainval, args.np_ratio)
 
     # Create models
     if args.embedding == 'kron':
@@ -266,6 +266,7 @@ if __name__ == '__main__':
     parser.add_argument('--margin', type=float, default=0.5)
     # optimizer
     parser.add_argument('--lr', type=float, default=0.1)
+    parser.add_argument('--np-ratio', type=int, default=3)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--ss', type=int, default=40)
