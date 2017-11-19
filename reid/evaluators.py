@@ -44,10 +44,18 @@ def compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, a
     #outputs = outputs[1].view(-1 ,2)
     return outputs
 
-def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
-    for i in model:
-        i.eval()
 
+def pairwise_similarity_score(model, probe_feature, gallery_feature, i):
+    p_g_score = model(Variable(probe_feature[i].view(1, -1).cuda(), volatile=True),
+                        Variable(gallery_feature.cuda(), volatile=True))
+    p_g_score = p_g_score.view(-1, 2)
+    return p_g_score
+
+
+def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
+    # for i in model:
+    #     i.eval()
+    model.eval()
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
@@ -56,8 +64,9 @@ def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, re
     probe_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in query], 0)
     for i in range(len(query)):
         gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
-        pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, alpha)
-
+        # pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, alpha)
+        pairwise_score[i, :, :] = model(Variable(probe_feature[i].view(1, -1).cuda(), volatile=True),
+                                        Variable(gallery_feature.cuda(), volatile=True))
         batch_time.update(time.time() - end)
         end = time.time()
 
@@ -228,7 +237,7 @@ class CascadeEvaluator(object):
     
             if self.embed_dist_fn is not None:
                 # embeddings = embeddings[:, 0].data
-                embeddings = self.embed_dist_fn(embeddings)
+                embeddings = self.embed_dist_fn(embeddings.data)
     
             # Merge two-stage distances
             for k, embed in enumerate(embeddings):
