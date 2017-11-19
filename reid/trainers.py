@@ -11,7 +11,7 @@ from .utils.meters import AverageMeter
 
 
 class BaseTrainer(object):
-    def __init__(self, model, criterion, alpha, grp_num, num_classes=0, num_instances=4):
+    def __init__(self, model, criterion, alpha=0, grp_num=1, num_classes=0, num_instances=4):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
@@ -20,7 +20,7 @@ class BaseTrainer(object):
         self.alpha = alpha
         self.grp_num = grp_num
 
-    def train(self, epoch, data_loader, optimizer, base_lr, warm_up=True, print_freq=1):
+    def train(self, epoch, data_loader, optimizer, base_lr, warm_up=False, print_freq=1):
         self.model.train()
 
         batch_time = AverageMeter()
@@ -169,3 +169,17 @@ class RandomWalkGrpTrainer(BaseTrainer):
         else:
             raise ValueError("Unsupported loss:", self.criterion)
         return loss, prec
+
+
+class SiameseTrainer(BaseTrainer):
+    def _parse_data(self, inputs):
+        (imgs1, _, pids1, _), (imgs2, _, pids2, _) = inputs
+        inputs = [Variable(imgs1), Variable(imgs2)]
+        targets = Variable((pids1 == pids2).long().cuda())
+        return inputs, targets
+
+    def _forward(self, inputs, targets):
+        outputs = self.model(*inputs)
+        loss = self.criterion(outputs, targets)
+        prec1, = accuracy(outputs.data, targets.data)
+        return loss, prec1[0]
