@@ -201,7 +201,7 @@ class CascadeEvaluator(object):
         self.embed_model = embed_model
         self.embed_dist_fn = embed_dist_fn
 
-    def evaluate(self, data_loader, query, gallery, alpha, cache_file=None,
+    def evaluate(self, data_loader, query, gallery, alpha=0, cache_file=None,
                  rerank_topk=75, second_stage=True, dataset=None):
         # Extract features image by image
         features, _ = extract_features(self.base_model, data_loader)
