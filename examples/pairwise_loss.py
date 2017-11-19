@@ -128,11 +128,12 @@ def main(args):
         embed_model = EltwiseSubEmbed(use_batch_norm=True,
                                       use_classifier=True,
                                       num_features=args.features, num_classes=2)
+
     if (args.embedding == 'hgkron') or (args.embedding == 'hgsub') or (args.embedding == 'hgkronsa'):
         model = SiameseHourGlassNet(base_model, embed_model)
     else:
         model = SiameseNet(base_model, embed_model)
-    model = torch.nn.DataParallel(model).cuda()
+    model = torch.nn.DataParallel(model.cuda())
 
     if args.retrain:
         checkpoint = load_checkpoint(args.retrain)
@@ -155,7 +156,7 @@ def main(args):
     # Evaluator
     evaluator = CascadeEvaluator(
         torch.nn.DataParallel(base_model).cuda(),
-        torch.nn.DataParallel(embed_model).cuda(),
+        embed_model,
         embed_dist_fn=lambda x: F.softmax(Variable(x)).data[:, 0])
     if args.evaluate:
         # pdb.set_trace()
