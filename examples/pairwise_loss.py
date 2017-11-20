@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 
+from reid import datasets
 from reid.datasets import create
 # from reid.mining import mine_hard_pairs
 from reid.models import ResNet
@@ -148,9 +149,11 @@ def main(args):
         model.load_state_dict(checkpoint['state_dict'])
         args.start_epoch = checkpoint['epoch']
         best_top1 = checkpoint['best_top1']
+        best_mAP = checkpoint['best_mAP']
         print("=> start epoch {}  best top1 {:.1%}"
               .format(args.start_epoch, best_top1))
     else:
+        best_mAP = 0
         best_top1 = 0
 
     # Evaluator
@@ -167,7 +170,7 @@ def main(args):
     #     pickle.dump(dataset.query, fp)
     # with open('market1501gallery', 'wb') as fp:
     #             pickle.dump(dataset.gallery, fp)
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100, dataset=args.dataset)
         return
 
     # if args.hard_examples:
@@ -222,24 +225,27 @@ def main(args):
         lr = adjust_lr(epoch)
         trainer.train(epoch, train_loader, optimizer, base_lr=args.lr, warm_up=False)
 
-        top1 = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, dataset=args.dataset)
 
-        is_best = top1 > best_top1
+        #is_best = top1 > best_top1
         best_top1 = max(top1, best_top1)
+        is_best = mAP > best_mAP
+        best_mAP = max(mAP, best_mAP)
         save_checkpoint({
             'state_dict': model.state_dict(),
             'epoch': epoch + 1,
             'best_top1': best_top1,
+            'best_mAP': best_mAP,
         }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-        print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, top1, best_top1, ' *' if is_best else ''))
+        print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, dataset=args.dataset)
 
 
 if __name__ == '__main__':
@@ -247,7 +253,7 @@ if __name__ == '__main__':
         description="Training Inception Siamese Model")
     # data
     parser.add_argument('-d', '--dataset', type=str, default='cuhk03',
-                        choices=['cuhk03', 'market1501', 'viper', 'duke'])
+                        choices=datasets.names())
     parser.add_argument('-b', '--batch-size', type=int, default=64)
     parser.add_argument('-j', '--workers', type=int, default=2)
     parser.add_argument('--split', type=int, default=0)
