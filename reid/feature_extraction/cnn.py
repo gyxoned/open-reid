@@ -6,12 +6,13 @@ from torch.autograd import Variable
 from ..utils import to_torch
 import pdb
 
-def extract_cnn_feature(model, inputs, modules=None):
+def extract_cnn_feature(model,fc, inputs, modules=None):
     model.eval()
     inputs = to_torch(inputs)
     inputs = Variable(inputs.cuda(), volatile=True)
     if modules is None:
         outputs = model(inputs)
+        outputs = fc(outputs)
         outputs = outputs.data.cpu()
         return outputs
     # Register forward hook for each module

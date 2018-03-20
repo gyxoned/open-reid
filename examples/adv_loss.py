@@ -15,12 +15,12 @@ from reid import datasets
 from reid.datasets import create
 # from reid.mining import mine_hard_pairs
 from reid.models import ResNet
-from reid.models.embedding import EltwiseSubEmbed
+from reid.models.embedding import EltwiseSubEmbed,BranchEmbed,CombineEmbed
     # KronEmbed, HourGlassEltwiseSubEmbed, \
     #  HourGlassEltwiseKronEmbed, HourGlassEltwiseKronEmbedSelfAtt
-from reid.models.multi_branch import SiameseNet\
+from reid.models.multi_branch import DoubleSiameseNet\
     # , SiameseHourGlassNet
-from reid.trainers import SiameseTrainer\
+from reid.trainers import AdvTrainer\
     # , SiameseHourGlassTrainer
 from reid.evaluators import CascadeEvaluator
 from reid.utils.data import transforms
@@ -44,6 +44,8 @@ def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trai
                                       std=[0.229, 0.224, 0.225])
 
     train_set = dataset.trainval if combine_trainval else dataset.train
+    num_classes = (dataset.num_trainval_ids if combine_trainval
+                   else dataset.num_train_ids)
 
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
@@ -78,7 +80,7 @@ def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trai
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=False)
 
-    return dataset, train_loader, val_loader, test_loader
+    return dataset, train_loader, val_loader, test_loader, num_classes
 
 
 def main(args):
@@ -93,48 +95,27 @@ def main(args):
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
 
     # Create data loaders
-    dataset, train_loader, val_loader, test_loader = \
+    dataset, train_loader, val_loader, test_loader, num_classes = \
         get_data(args.dataset, args.split, args.data_dir,
                  args.batch_size, args.workers, args.combine_trainval, args.np_ratio)
 
     # Create models
-    if args.embedding == 'kron':
-        base_model = ResNet(args.depth, cut_at_pooling=True)
-        embed_model = KronEmbed(8, 4, args.features, 2)
-    elif args.embedding == 'hgkronsa':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseKronEmbedSelfAtt(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    elif args.embedding == 'hgkron':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseKronEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    elif args.embedding == 'hgsub':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseSubEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    else:
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = EltwiseSubEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
+    base_model = ResNet(args.depth, num_classes=0,
+                        cut_at_pooling=True,
+                        num_features=2048, dropout=args.dropout)
+    feature_branch = BranchEmbed(2048, args.features, args.dropout)
+    noise_branch = BranchEmbed(2048, args.noise, args.dropout)
+    embed_model_feature = EltwiseSubEmbed(use_batch_norm=True,
+                                  use_classifier=True,
+                                  num_features=args.features, num_classes=2)
+    # embed_model_noise = EltwiseSubEmbed(use_batch_norm=True,
+    #                               use_classifier=True,
+    #                               num_features=args.noise, num_classes=1)
+    embed_model_noise = CombineEmbed(num_features=args.noise, num_classes=num_classes)
 
-    if (args.embedding == 'hgkron') or (args.embedding == 'hgsub') or (args.embedding == 'hgkronsa'):
-        model = SiameseHourGlassNet(base_model, embed_model)
-    else:
-        model = SiameseNet(base_model, embed_model)
+    model = DoubleSiameseNet(base_model, feature_branch, noise_branch, embed_model_feature)
     model = torch.nn.DataParallel(model.cuda())
+    embed_model_noise = torch.nn.DataParallel(embed_model_noise.cuda())
 
     if args.retrain:
         checkpoint = load_checkpoint(args.retrain)
@@ -159,59 +140,37 @@ def main(args):
     # Evaluator
     evaluator = CascadeEvaluator(
         torch.nn.DataParallel(base_model).cuda(),
-        embed_model,
+        torch.nn.DataParallel(feature_branch).cuda(),
+        embed_model_feature,
         embed_dist_fn=lambda x: F.softmax(Variable(x)).data[:, 0])
     if args.evaluate:
-        # pdb.set_trace()
-        # #print("Validation:")
-        # #evaluator.evaluate(val_loader, dataset.val, dataset.val)
         print("Test:")
-    # with open('market1501query', 'wb') as fp:
-    #     pickle.dump(dataset.query, fp)
-    # with open('market1501gallery', 'wb') as fp:
-    #             pickle.dump(dataset.gallery, fp)
         evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100, dataset=args.dataset)
         return
 
-    # if args.hard_examples:
-    #     # Use sequential train set loader
-    #     data_loader = DataLoader(
-    #         Preprocessor(dataset.trainval, root=dataset.images_dir,
-    #                      transform=val_loader.dataset.transform),
-    #         batch_size=args.batch_size, num_workers=args.workers,
-    #         shuffle=False, pin_memory=False)
-    #     # Mine hard triplet examples, index of [(anchor, pos, neg), ...]
-    #     pairs = mine_hard_pairs(torch.nn.DataParallel(base_model).cuda(),
-    #                             data_loader, margin=args.margin)
-    #     print("Mined {} hard example triplets".format(len(pairs)))
-    #     # Build a hard examples loader
-    #     train_loader.sampler = SubsetRandomSampler(pairs)
-
     # Criterion
     criterion = torch.nn.CrossEntropyLoss().cuda()
-
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    #
+    criterion_adv = torch.nn.BCELoss().cuda()
     optimizer = torch.optim.SGD([
                                {'params': model.module.base_model.parameters()},
+                               {'params': model.module.feature_branch.parameters()},
+                               {'params': model.module.noise_branch.parameters()},
                                {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
                                ], args.lr,
                                momentum=args.momentum,
                                weight_decay=args.weight_decay)
-#    optimizer = torch.optim.SGD([
-#                                {'params': model.module.base_model.base.layer4.parameters()},
-#                                {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
-#                                ], args.lr,
-#                                momentum=args.momentum,
-#                                weight_decay=args.weight_decay)
-
-
+    # optimizer = torch.optim.Adam([
+    #                            {'params': model.module.base_model.parameters()},
+    #                            {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
+    #                            ], args.lr)
+    optimizer_noise = torch.optim.SGD([
+                               {'params': embed_model_noise.module.parameters(), 'lr': args.lr}
+                               ], args.lr,
+                               momentum=args.momentum,
+                               weight_decay=args.weight_decay)
 
     # Trainer
-    trainer = SiameseTrainer(model, criterion)
-    #trainer = SiameseHourGlassTrainer(model, criterion)
+    trainer = AdvTrainer(model,embed_model_noise, criterion,criterion_adv)
 
     # Schedule learning rate
     def adjust_lr(epoch):
@@ -223,7 +182,7 @@ def main(args):
     # Start training
     for epoch in range(args.start_epoch, args.epochs):
         lr = adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer, base_lr=args.lr, warm_up=False)
+        trainer.train(epoch, train_loader, optimizer, optimizer_noise, base_lr=args.lr)
 
         top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, dataset=args.dataset)
 
@@ -263,7 +222,8 @@ if __name__ == '__main__':
     # model
     parser.add_argument('--depth', type=int, default=50,
                         choices=[18, 34, 50, 101, 152])
-    parser.add_argument('--features', type=int, default=2048)
+    parser.add_argument('--features', type=int, default=1024)
+    parser.add_argument('--noise', type=int, default=256)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--embedding', type=str, default='sub',
                         choices=['kron', 'sub', 'hgkron', 'hgsub', 'hgkronsa'])

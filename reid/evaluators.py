@@ -81,8 +81,9 @@ def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, re
     return torch.cat(pairwise_score)
 
 
-def extract_features(model, data_loader, print_freq=1, metric=None):
+def extract_features(model, fc, data_loader, print_freq=1, metric=None, feature_length=1024):
     model.eval()
+    fc.eval()
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
@@ -93,7 +94,7 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
     for i, (imgs, fnames, pids, _) in enumerate(data_loader):
         data_time.update(time.time() - end)
 
-        outputs = extract_cnn_feature(model, imgs)
+        outputs = extract_cnn_feature(model, fc,imgs)
         for fname, output, pid in zip(fnames, outputs, pids):
             features[fname] = output.cuda()
             labels[fname] = pid
@@ -204,16 +205,17 @@ class Evaluator(object):
 
 
 class CascadeEvaluator(object):
-    def __init__(self, base_model, embed_model, embed_dist_fn=None):
+    def __init__(self, base_model, fc_model, embed_model, embed_dist_fn=None):
         super(CascadeEvaluator, self).__init__()
         self.base_model = base_model
+        self.fc_model = fc_model
         self.embed_model = embed_model
         self.embed_dist_fn = embed_dist_fn
 
     def evaluate(self, data_loader, query, gallery, alpha=0, cache_file=None,
                  rerank_topk=75, second_stage=True, dataset=None):
         # Extract features image by image
-        features, _ = extract_features(self.base_model, data_loader)
+        features, _ = extract_features(self.base_model, self.fc_model, data_loader)
 
         # Compute pairwise distance and evaluate for the first stage
         distmat = pairwise_distance(features, query, gallery)

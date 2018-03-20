@@ -4,6 +4,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 import pdb
+from torch.nn import init
 
 
 class RandomWalkEmbed(nn.Module):
@@ -80,3 +81,34 @@ class EltwiseSubEmbed(nn.Module):
             x = x.sum(1)
         return x
 
+class BranchEmbed(nn.Module):
+    def __init__(self, input_nc, output_nc, drop):
+        super(BranchEmbed, self).__init__()
+        self.fc = nn.Linear(input_nc, output_nc)
+        self.bn = nn.BatchNorm1d(output_nc)
+        self.drop = nn.Dropout(drop)
+
+        init.kaiming_normal(self.fc.weight, mode='fan_out')
+        init.constant(self.fc.bias, 0)
+        init.constant(self.bn.weight, 1)
+        init.constant(self.bn.bias, 0)
+
+    def forward(self, x):
+        x = self.fc(x)
+        x = self.drop(F.relu(self.bn(x)))
+        return x
+
+class CombineEmbed(nn.Module):
+    def __init__(self, num_features=0, num_classes=0):
+        super(CombineEmbed, self).__init__()
+        self.classifier = nn.Linear(num_features, num_classes)
+        self.classifier.weight.data.normal_(0, 0.001)
+        self.classifier.bias.data.zero_()
+
+        self.logsoftmax = nn.LogSoftmax()
+
+    def forward(self, x1, x2):
+        x1 = self.logsoftmax(self.classifier(x1))
+        x2 = self.logsoftmax(self.classifier(x2))
+        x = torch.cat((x1,x2),dim=0)
+        return x

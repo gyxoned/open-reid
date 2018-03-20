@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
 import pdb
-
+from torch.nn import init
 
 def random_walk_compute(p_g_score, g_g_score, alpha):
     # Random Walk Computation
@@ -109,3 +109,22 @@ class SiameseNet(nn.Module):
         if self.embed_model is None:
             return x1, x2
         return self.embed_model(x1, x2)
+
+class DoubleSiameseNet(nn.Module):
+    def __init__(self, base_model, feature_branch, noise_branch, embed_model):
+        super(DoubleSiameseNet, self).__init__()
+        self.base_model = base_model
+        self.embed_model = embed_model
+        self.feature_branch = feature_branch
+        self.noise_branch = noise_branch
+
+    def forward(self, x1, x2):
+        x1, x2 = self.base_model(x1), self.base_model(x2)
+        x1_feature = self.feature_branch(x1)
+        x1_noise = self.noise_branch(x1)
+
+        x2_feature = self.feature_branch(x2)
+        x2_noise = self.noise_branch(x2)
+
+        feature_embed = self.embed_model(x1_feature,x2_feature)
+        return x1_noise,x2_noise,feature_embed
