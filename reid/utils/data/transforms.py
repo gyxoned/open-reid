@@ -1,7 +1,10 @@
 from __future__ import absolute_import
 
 from torchvision.transforms import *
-
+from PIL import Image
+import random
+import math
+import numpy as np
 
 class RectScale(object):
     def __init__(self, height, width, interpolation=Image.BILINEAR):

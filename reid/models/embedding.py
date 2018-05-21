@@ -17,8 +17,8 @@ class RandomWalkEmbed(nn.Module):
         self.classifier = nn.Linear(feat_num, num_classes)
         self.classifier.weight.data.normal_(0, 0.001)
         self.classifier.bias.data.zero_()
-	self.drop = nn.Dropout(drop_ratio)
-        
+        self.drop = nn.Dropout(drop_ratio)
+
 
     def forward(self, probe_x, gallery_x):
         probe_x.contiguous()
@@ -38,7 +38,7 @@ class RandomWalkEmbed(nn.Module):
         diff = diff.view(N_probe * N_gallery, -1)
         diff = diff.contiguous()
         bn_diff = self.bn(diff)
-	bn_diff = self.drop(bn_diff)
+        bn_diff = self.drop(bn_diff)
 
         cls_encode = self.classifier(bn_diff)
         cls_encode = cls_encode.view(N_probe, N_gallery, -1)
@@ -78,5 +78,7 @@ class EltwiseSubEmbed(nn.Module):
             x = self.classifier(x)
         else:
             x = x.sum(1)
-        return x
 
+        # x = F.sigmoid(x)
+
+        return x

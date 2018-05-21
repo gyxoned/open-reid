@@ -67,6 +67,7 @@ def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, re
         # pairwise_score[i, :, :] = compute_random_walk(model, probe_feature, gallery_feature, i, rerank_topk, alpha)
         pairwise_score[i, :, :] = model(Variable(probe_feature[i].view(1, -1).cuda(), volatile=True),
                                         Variable(gallery_feature.cuda(), volatile=True))
+        # pairwise_score[i,:,0] = 1 - pairwise_score[i,:,1]
         batch_time.update(time.time() - end)
         end = time.time()
 
@@ -220,25 +221,25 @@ class CascadeEvaluator(object):
         print("First stage evaluation:")
         if second_stage:
             evaluate_all(distmat, query=query, gallery=gallery, dataset=dataset)
-    
+
             # Sort according to the first stage distance
             distmat = to_numpy(distmat)
             rank_indices = np.argsort(distmat, axis=1)
-            
+
             # Build a data loader for topk predictions for each query
             topk_gallery = [[] for i in range(len(query))]
             for i, indices in enumerate(rank_indices):
                 for j in indices[:rerank_topk]:
                     gallery_fname_id_pid = gallery[j]
                     topk_gallery[i].append(gallery_fname_id_pid)
-    
+
             embeddings = extract_embeddings(self.embed_model, features, alpha,
                                     query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
-    
+
             if self.embed_dist_fn is not None:
                 # embeddings = embeddings[:, 0].data
                 embeddings = self.embed_dist_fn(embeddings.data)
-    
+
             # Merge two-stage distances
             for k, embed in enumerate(embeddings):
                 i, j = k // rerank_topk, k % rerank_topk

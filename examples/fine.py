@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import argparse
 import os.path as osp
 
@@ -6,33 +6,31 @@ import numpy as np
 import sys
 sys.path.append('./')
 import torch
-import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
-from torch.autograd import Variable
+from torch import nn
+from torch.backends import cudnn
 from torch.utils.data import DataLoader
+from torch.autograd import Variable
+
 
 from reid import datasets
+from reid import models
 from reid.datasets import create
-# from reid.mining import mine_hard_pairs
-from reid.models import ResNet
-from reid.models.embedding import EltwiseSubEmbed
-    # KronEmbed, HourGlassEltwiseSubEmbed, \
-    #  HourGlassEltwiseKronEmbed, HourGlassEltwiseKronEmbedSelfAtt
-from reid.models.multi_branch import SiameseNet\
-    # , SiameseHourGlassNet
-from reid.trainers import SiameseTrainer\
-    # , SiameseHourGlassTrainer
-from reid.evaluators import CascadeEvaluator
-from reid.utils.data import transforms
-from reid.utils.data.sampler import RandomPairSampler, SubsetRandomSampler, RandomMultipleGallerySampler
+from reid.dist_metric import DistanceMetric
+from reid.loss import TripletLoss
+from reid.trainers import Trainer, RandomWalkTrainer
+from reid.evaluators import Evaluator, CascadeEvaluator
 from reid.utils.data.preprocessor import Preprocessor
 from reid.utils.logging import Logger
-from reid.utils.serialization import load_checkpoint, save_checkpoint, \
-    copy_state_dict
+from reid.utils.serialization import load_checkpoint, save_checkpoint, copy_state_dict
+from reid.models.embedding import RandomWalkEmbed
+from reid.models.multi_branch import RandomWalkNet
+from reid.models import ResNet
+from reid.models.embedding import EltwiseSubEmbed
+from reid.models.multi_branch import SiameseNet
+from reid.utils.data import transforms
+from reid.utils.data.sampler import RandomPairSampler, SubsetRandomSampler, RandomMultipleGallerySampler
 import pdb
-import pickle
-
-
 
 def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trainval, np_ratio):
     root = osp.join(data_dir, dataset_name)
@@ -54,8 +52,8 @@ def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trai
                          transforms.ToTensor(),
                          normalizer,
                      ])),
-        sampler=RandomPairSampler(train_set, neg_pos_ratio=np_ratio),
-        # sampler=RandomMultipleGallerySampler(train_set),
+        # sampler=RandomPairSampler(train_set, neg_pos_ratio=np_ratio),
+        sampler=RandomMultipleGallerySampler(train_set),
         batch_size=batch_size, num_workers=workers, pin_memory=False)
 
     val_loader = DataLoader(
@@ -85,8 +83,6 @@ def get_data(dataset_name, split_id, data_dir, batch_size, workers, combine_trai
 def main(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-
     cudnn.benchmark = True
 
     # Redirect print to both console and log file
@@ -94,131 +90,96 @@ def main(args):
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
 
     # Create data loaders
+    # assert args.num_instances > 1, "num_instances should be greater than 1"
+    # assert args.batch_size % args.num_instances == 0, \
+    #     'num_instances should divide batch_size'
+    # if args.height is None or args.width is None:
+    #     args.height, args.width = (144, 56) if args.arch == 'inception' else \
+    #                               (256, 128)
     dataset, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir,
                  args.batch_size, args.workers, args.combine_trainval, args.np_ratio)
 
-    # Create models
-    if args.embedding == 'kron':
-        base_model = ResNet(args.depth, cut_at_pooling=True)
-        embed_model = KronEmbed(8, 4, args.features, 2)
-    elif args.embedding == 'hgkronsa':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseKronEmbedSelfAtt(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    elif args.embedding == 'hgkron':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseKronEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    elif args.embedding == 'hgsub':
-        base_model = ResNet(args.depth, num_classes=0,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = HourGlassEltwiseSubEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
-    else:
-        base_model = ResNet(args.depth, num_classes=0,
-                            # cut_after_embed=True,
-                            cut_at_pooling=True,
-                            num_features=args.features, dropout=args.dropout)
-        embed_model = EltwiseSubEmbed(use_batch_norm=True,
-                                      use_classifier=True,
-                                      num_features=args.features, num_classes=2)
+    # Create model
+    # Hacking here to let the classifier be the last feature embedding layer
+    # Net structure: avgpool -> FC(1024) -> FC(args.features)
+    # base_model = models.create(args.arch, num_features=1024, cut_at_pooling=True,
+    #                       dropout=args.dropout, num_classes=args.features)
+    #
+    # embed_model = RandomWalkEmbed(instances_num=args.num_instances,
+    #                         feat_num=2048, num_classes=2)
+    base_model = ResNet(args.depth, num_classes=0,
+                        cut_at_pooling=True,
+                        num_features=args.features, dropout=args.dropout)
+    embed_model = RandomWalkEmbed(feat_num=args.features, num_classes=2, drop_ratio=0.0)
 
-    if (args.embedding == 'hgkron') or (args.embedding == 'hgsub') or (args.embedding == 'hgkronsa'):
-        model = SiameseHourGlassNet(base_model, embed_model)
-    else:
-        model = SiameseNet(base_model, embed_model)
-    model = torch.nn.DataParallel(model.cuda())
+    base_model = nn.DataParallel(base_model).cuda()
+    embed_model = embed_model.cuda()
+
+    model = RandomWalkNet(base_model=base_model, embed_model=embed_model)
+    # model = torch.nn.DataParallel(model.cuda())
 
     if args.retrain:
+        print('loading base part of pretrained model...')
         checkpoint = load_checkpoint(args.retrain)
-        print("loading base part")
-        copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
-        print("loading embed part")
-        copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
+        copy_state_dict(checkpoint, base_model, strip='module.base_model.')
+        # copy_state_dict(checkpoint['state_dict'], base_model, strip='module.base_model.')
+        print('loading embed part of pretrained model...')
+        copy_state_dict(checkpoint, embed_model, strip='module.embed_model.')
+        # copy_state_dict(checkpoint['state_dict'], embed_model, strip='module.embed_model.')
 
+    # base_model = nn.DataParallel(base_model).cuda()
+    # embed_model = embed_model.cuda()
+    #
+    # model = RandomWalkNet(instances_num=args.num_instances,
+    #                     base_model=base_model, embed_model=embed_model)
 
+    # Distance metric
+    # metric = DistanceMetric(algorithm=args.dist_metric)
+
+        # Load from checkpoint
+    start_epoch = best_top1 = 0
     best_mAP = 0
-    best_top1 = 0
-    # Load from checkpoint
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
-        if args.resume.endswith('.tar'):
-            model.load_state_dict(checkpoint['state_dict'])
-            start_epoch = checkpoint['epoch']
-            best_top1 = checkpoint['best_top1']
-            print("=> Start epoch {}  best top1 {:.1%}"
-                  .format(start_epoch, best_top1))
-        else:
-            # for key in checkpoint.keys():
-            #     checkpoint[key[7:]]=checkpoint.pop(key)
-            model.load_state_dict(checkpoint)
+        model.load_state_dict(checkpoint['state_dict'])
+        start_epoch = checkpoint['epoch']
+        best_top1 = checkpoint['best_top1']
+        print("=> Start epoch {}  best top1 {:.1%}"
+              .format(start_epoch, best_top1))
 
     # Evaluator
+    # evaluator = CascadeEvaluator(
+    #                         base_model,
+    #                         embed_model,
+    #                         embed_dist_fn=lambda x: F.softmax(x).data[:, 0])
+    # Evaluator
     evaluator = CascadeEvaluator(
-        torch.nn.DataParallel(base_model).cuda(),
+        base_model,
         embed_model,
         embed_dist_fn=lambda x: F.softmax(Variable(x)).data[:, 0])
     if args.evaluate:
-        # pdb.set_trace()
-        # #print("Validation:")
-        # #evaluator.evaluate(val_loader, dataset.val, dataset.val)
         print("Test:")
-    # with open('market1501query', 'wb') as fp:
-    #     pickle.dump(dataset.query, fp)
-    # with open('market1501gallery', 'wb') as fp:
-    #             pickle.dump(dataset.gallery, fp)
         evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100, dataset=args.dataset)
         return
 
-    # if args.hard_examples:
-    #     # Use sequential train set loader
-    #     data_loader = DataLoader(
-    #         Preprocessor(dataset.trainval, root=dataset.images_dir,
-    #                      transform=val_loader.dataset.transform),
-    #         batch_size=args.batch_size, num_workers=args.workers,
-    #         shuffle=False, pin_memory=False)
-    #     # Mine hard triplet examples, index of [(anchor, pos, neg), ...]
-    #     pairs = mine_hard_pairs(torch.nn.DataParallel(base_model).cuda(),
-    #                             data_loader, margin=args.margin)
-    #     print("Mined {} hard example triplets".format(len(pairs)))
-    #     # Build a hard examples loader
-    #     train_loader.sampler = SubsetRandomSampler(pairs)
-
     # Criterion
-    criterion = torch.nn.CrossEntropyLoss().cuda()
-    # criterion = torch.nn.BCELoss().cuda()
+    #criterion = TripletLoss(margin=args.margin).cuda()
+    criterion = nn.CrossEntropyLoss().cuda()
 
-    # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay)
-    #
+    # Optimizer
+    # optimizer = torch.optim.Adam(model.parameters(), lr=args.lr,
+    #                              weight_decay=args.weight_decay)
+    # import pdb; pdb.set_trace()
     optimizer = torch.optim.SGD([
-                               {'params': model.module.base_model.parameters()},
-                               {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
+                               {'params': model.base_model.module.parameters()},
+                               {'params': model.embed_model.parameters(), 'lr': args.lr*10}
                                ], args.lr,
                                momentum=args.momentum,
                                weight_decay=args.weight_decay)
-#    optimizer = torch.optim.SGD([
-#                                {'params': model.module.base_model.base.layer4.parameters()},
-#                                {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
-#                                ], args.lr,
-#                                momentum=args.momentum,
-#                                weight_decay=args.weight_decay)
-
-
-
     # Trainer
-    trainer = SiameseTrainer(model, criterion)
-    #trainer = SiameseHourGlassTrainer(model, criterion)
+    #trainer = Trainer(model, criterion)
+    trainer = RandomWalkTrainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
@@ -253,7 +214,6 @@ def main(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, dataset=args.dataset)
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(

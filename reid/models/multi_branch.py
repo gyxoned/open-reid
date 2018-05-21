@@ -27,12 +27,12 @@ class RandomWalkNet(nn.Module):
     def __init__(self, instances_num=4, base_model=None, embed_model=None):
         super(RandomWalkNet, self).__init__()
         self.instances_num = instances_num
-        self.base = base_model
-        self.embed = embed_model
+        self.base_model = base_model
+        self.embed_model = embed_model
         self.topk = 10
 
     def forward(self, x):
-        x = self.base(x)
+        x = self.base_model(x)
         N, C = x.size()
         x = x.view(int(N / self.instances_num), self.instances_num, -1)
 
@@ -43,11 +43,11 @@ class RandomWalkNet(nn.Module):
         gallery_x = gallery_x.contiguous()
         gallery_x = gallery_x.view(-1, C)
 
-        p_g_score = self.embed(probe_x, gallery_x)
-        g_g_score = self.embed(gallery_x, gallery_x)
-        
+        p_g_score = self.embed_model(probe_x, gallery_x)
+        g_g_score = self.embed_model(gallery_x, gallery_x)
+
         #Random Walk Computation
-        alpha = 0.5
+        alpha = 0.0
         ones = Variable(torch.ones(g_g_score.size()[:2]), requires_grad=False).cuda()
         one_diag = Variable(torch.eye(g_g_score.size(0)), requires_grad=False).cuda()
         D = torch.diag(1.0 / torch.sum((ones - one_diag) * g_g_score[:,:,1], 1))

@@ -27,7 +27,7 @@ class BaseTrainer(object):
         data_time = AverageMeter()
         losses = AverageMeter()
         precisions = AverageMeter()
-        
+
         warm_up_ep = 20
         warm_iters = float(len(data_loader) * warm_up_ep)
 
@@ -40,7 +40,7 @@ class BaseTrainer(object):
 
             losses.update(loss.data[0], targets.size(0))
             precisions.update(prec1, targets.size(0))
-            if warm_up: 
+            if warm_up:
                 if epoch <= (warm_up_ep):
                     lr = (base_lr / warm_iters) + (epoch*len(data_loader) +(i+1))*(base_lr / warm_iters)
                     print(lr)
@@ -129,7 +129,6 @@ class RandomWalkTrainer(BaseTrainer):
             pairwise_targets[j] = (gallery_targets[j - int(targets.size(0) / self.num_instances)] == gallery_targets).long()
         pairwise_targets = pairwise_targets.view(-1).long()
         outputs = self.model(*inputs)
-
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, pairwise_targets)
             prec, = accuracy(outputs.data, pairwise_targets.data)
@@ -181,5 +180,9 @@ class SiameseTrainer(BaseTrainer):
     def _forward(self, inputs, targets):
         outputs = self.model(*inputs)
         loss = self.criterion(outputs, targets)
+        # loss = self.criterion(outputs[:,0], targets.float())
+        # outputs_pair = torch.zeros(outputs.size(0),2).cuda()
+        # outputs_pair[:,1] = outputs.data
+        # outputs_pair[:,0] = 1 - outputs.data
         prec1, = accuracy(outputs.data, targets.data)
         return loss, prec1[0]
