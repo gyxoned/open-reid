@@ -34,7 +34,9 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
                    else dataset.num_train_ids)
 
     train_transformer = T.Compose([
-        T.RandomSizedRectCrop(height, width),
+        # T.RandomSizedRectCrop(height, width),
+        T.RectScale(height, width),
+        T.RandomSizedEarser(),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,
@@ -75,6 +77,7 @@ def main(args):
     # Redirect print to both console and log file
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
+    print("==========\nArgs:{}\n==========".format(args))
 
     # Create data loaders
     if args.height is None or args.width is None:
@@ -130,14 +133,16 @@ def main(args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay,
                                 nesterov=True)
+    # optimizer = torch.optim.Adam(param_groups, lr=args.lr,
+    #                             weight_decay=args.weight_decay)
 
     # Trainer
     trainer = Trainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
-        step_size = 60 if args.arch == 'inception' else 40
-        lr = args.lr * (0.1 ** (epoch // step_size))
+        # step_size = 60 if args.arch == 'inception' else 40
+        lr = args.lr * (0.1 ** (epoch // args.step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
 
@@ -171,7 +176,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Softmax loss classification")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='cuhk03',
+    parser.add_argument('-d', '--dataset', type=str, default='msmt17',
                         choices=datasets.names())
     parser.add_argument('-b', '--batch-size', type=int, default=256)
     parser.add_argument('-j', '--workers', type=int, default=4)
@@ -188,7 +193,7 @@ if __name__ == '__main__':
     # model
     parser.add_argument('-a', '--arch', type=str, default='resnet50',
                         choices=models.names())
-    parser.add_argument('--features', type=int, default=128)
+    parser.add_argument('--features', type=int, default=1024)
     parser.add_argument('--dropout', type=float, default=0.5)
     # optimizer
     parser.add_argument('--lr', type=float, default=0.1,
@@ -196,6 +201,7 @@ if __name__ == '__main__':
                              "parameters it is 10 times smaller than this")
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
+    parser.add_argument('--step-size', type=int, default=40)
     # training configs
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
