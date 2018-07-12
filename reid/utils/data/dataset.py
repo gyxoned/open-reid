@@ -113,32 +113,12 @@ class Dataset_MSMT(object):
         return osp.join(self.root, 'raw', 'MSMT17_V1')
 
     def load(self, verbose=True):
-        # splits = read_json(osp.join(self.root, 'splits.json'))
-        # if self.split_id >= len(splits):
-        #     raise ValueError("split_id exceeds total splits {}"
-        #                      .format(len(splits)))
-        # self.split = splits[self.split_id]
-
-        # Randomly split train / val
-        # trainval_pids = np.asarray(self.split['trainval'])
-        # np.random.shuffle(trainval_pids)
-        # num = len(trainval_pids)
-        # if isinstance(num_val, float):
-        #     num_val = int(round(num * num_val))
-        # if num_val >= num or num_val < 0:
-        #     raise ValueError("num_val exceeds total identities {}"
-        #                      .format(num))
-        # train_pids = sorted(trainval_pids[:-num_val])
-        # val_pids = sorted(trainval_pids[-num_val:])
-
-        # self.meta = read_json(osp.join(self.root, 'meta.json'))
-        # identities = self.meta['identities']
         exdir = osp.join(self.root, 'raw', 'MSMT17_V1')
         self.train, train_pids = _pluck_msmt(osp.join(exdir, 'list_train.txt'), 'train')
         self.val, val_pids = _pluck_msmt(osp.join(exdir, 'list_val.txt'), 'train')
         self.trainval = self.train + self.val
-        self.query, query_pids = _pluck_msmt(osp.join(exdir, 'list_gallery.txt'), 'test')
-        self.gallery, gallery_pids = _pluck_msmt(osp.join(exdir, 'list_query.txt'), 'test')
+        self.query, query_pids = _pluck_msmt(osp.join(exdir, 'list_query.txt'), 'test')
+        self.gallery, gallery_pids = _pluck_msmt(osp.join(exdir, 'list_gallery.txt'), 'test')
         self.num_train_ids = len(train_pids)
         self.num_val_ids = len(val_pids)
         self.num_trainval_ids = len(list(set(train_pids).union(set(val_pids))))
@@ -157,8 +137,3 @@ class Dataset_MSMT(object):
                   .format(len(query_pids), len(self.query)))
             print("  gallery  | {:5d} | {:8d}"
                   .format(len(gallery_pids), len(self.gallery)))
-
-    # def _check_integrity(self):
-    #     return osp.isdir(osp.join(self.root, 'images')) and \
-    #            osp.isfile(osp.join(self.root, 'meta.json')) and \
-    #            osp.isfile(osp.join(self.root, 'splits.json'))

@@ -6,6 +6,8 @@ import numpy as np
 import sys
 import torch
 from torch import nn
+from torch.nn import functional as F
+from torch.autograd import Variable
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
 
@@ -19,9 +21,14 @@ from reid.utils.data.preprocessor import Preprocessor
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
+from reid.utils.data.sampler import RandomPairSampler, SubsetRandomSampler, RandomMultipleGallerySampler
+from reid.models.embedding import EltwiseSubEmbed
+from reid.models.multi_branch import SiameseNet
+from reid.evaluators import CascadeEvaluator
+from reid.trainers import SiameseTrainer
 
 def get_data(name, split_id, data_dir, height, width, batch_size, workers,
-             combine_trainval):
+             combine_trainval, np_ratio):
     root = osp.join(data_dir, name)
 
     dataset = datasets.create(name, root, split_id=split_id)
@@ -30,8 +37,8 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
                              std=[0.229, 0.224, 0.225])
 
     train_set = dataset.trainval if combine_trainval else dataset.train
-    num_classes = (dataset.num_trainval_ids if combine_trainval
-                   else dataset.num_train_ids)
+    # num_classes = (dataset.num_trainval_ids if combine_trainval
+    #                else dataset.num_train_ids)
 
     train_transformer = T.Compose([
         # T.RandomSizedRectCrop(height, width),
@@ -51,22 +58,22 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
-        batch_size=batch_size, num_workers=workers,
-        shuffle=True, pin_memory=True, drop_last=True)
+        sampler=RandomPairSampler(train_set, neg_pos_ratio=np_ratio),
+        batch_size=batch_size, num_workers=workers, pin_memory=False)
 
     val_loader = DataLoader(
         Preprocessor(dataset.val, root=dataset.images_dir,
                      transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
-        shuffle=False, pin_memory=True)
+        shuffle=False, pin_memory=False)
 
     test_loader = DataLoader(
         Preprocessor(list(set(dataset.query) | set(dataset.gallery)),
                      root=dataset.images_dir, transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
-        shuffle=False, pin_memory=True)
+        shuffle=False, pin_memory=False)
 
-    return dataset, num_classes, train_loader, val_loader, test_loader
+    return dataset, train_loader, val_loader, test_loader
 
 
 def main(args):
@@ -86,94 +93,99 @@ def main(args):
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset, num_classes, train_loader, val_loader, test_loader = \
+    dataset, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers,
-                 args.combine_trainval)
+                 args.combine_trainval, args.np_ratio)
 
     # Create model
-    model = models.create(args.arch, num_features=args.features,
-                          dropout=args.dropout, num_classes=num_classes)
+    base_model = models.create(args.arch, cut_at_pooling=True)
+    embed_model = EltwiseSubEmbed(use_batch_norm=True, use_classifier=True,
+                                      num_features=2048, num_classes=2)
+    model = SiameseNet(base_model, embed_model)
 
     # Load from checkpoint
-    start_epoch = best_top1 = 0
+    start_epoch = best_mAP = best_top1 = 0
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
         start_epoch = checkpoint['epoch']
         best_top1 = checkpoint['best_top1']
-        print("=> Start epoch {}  best top1 {:.1%}"
-              .format(start_epoch, best_top1))
+        best_mAP = checkpoint['best_mAP']
+        print("=> Start epoch {}  best mAP {:.1%}"
+              .format(start_epoch, best_mAP))
     model = nn.DataParallel(model).cuda()
 
     # Distance metric
-    metric = DistanceMetric(algorithm=args.dist_metric)
+    # metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model)
+    evaluator = CascadeEvaluator(
+        torch.nn.DataParallel(base_model).cuda(),
+        embed_model,
+        embed_dist_fn=lambda x: F.softmax(Variable(x)).data[:, 0])
     if args.evaluate:
-        metric.train(model, train_loader)
-        print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val, metric, dataset=args.dataset)
+        # metric.train(model, train_loader)
+        # print("Validation:")
+        # evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric, dataset=args.dataset)
+        # evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100, dataset=args.dataset)
         return
 
     # Criterion
     criterion = nn.CrossEntropyLoss().cuda()
 
     # Optimizer
-    if hasattr(model.module, 'base'):
-        base_param_ids = set(map(id, model.module.base.parameters()))
-        new_params = [p for p in model.parameters() if
-                      id(p) not in base_param_ids]
-        param_groups = [
-            {'params': model.module.base.parameters(), 'lr_mult': 0.1},
-            {'params': new_params, 'lr_mult': 1.0}]
-    else:
-        param_groups = model.parameters()
-    optimizer = torch.optim.SGD(param_groups, lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay,
-                                nesterov=True)
+    # param_groups = [
+    #     {'params': model.module.base_model.parameters(), 'lr_mult': 0.1},
+    #     {'params': model.module.embed_model.parameters(), 'lr_mult': 1.0}]
+    optimizer = torch.optim.SGD([
+                               {'params': model.module.base_model.parameters()},
+                               {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
+                               ], args.lr, momentum=args.momentum,
+                                weight_decay=args.weight_decay)
     # optimizer = torch.optim.Adam(param_groups, lr=args.lr,
     #                             weight_decay=args.weight_decay)
 
     # Trainer
-    trainer = Trainer(model, criterion)
+    trainer = SiameseTrainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
         # step_size = 60 if args.arch == 'inception' else 40
         lr = args.lr * (0.1 ** (epoch // args.step_size))
         for g in optimizer.param_groups:
-            g['lr'] = lr * g.get('lr_mult', 1)
+            g['lr'] = lr 
+            # * g.get('lr_mult', 1)
+        return lr
 
     # Start training
     for epoch in range(start_epoch, args.epochs):
-        adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer)
-        if epoch < args.start_save:
-            continue
-        top1 = evaluator.evaluate(val_loader, dataset.val, dataset.val, dataset=args.dataset)
+        lr = adjust_lr(epoch)
+        trainer.train(epoch, train_loader, optimizer, base_lr=args.lr, warm_up=False)
+        # if epoch < args.start_save:
+        #     continue
+        top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, dataset=args.dataset)
 
-        is_best = top1 > best_top1
+        is_best = mAP > best_mAP
+        best_mAP = max(mAP, best_mAP)
         best_top1 = max(top1, best_top1)
         save_checkpoint({
             'state_dict': model.module.state_dict(),
             'epoch': epoch + 1,
+            'best_mAP': best_mAP,
             'best_top1': best_top1,
         }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-        print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, top1, best_top1, ' *' if is_best else ''))
+        print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
-    metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric, dataset=args.dataset)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, dataset=args.dataset)
 
 
 if __name__ == '__main__':
@@ -202,6 +214,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.1,
                         help="learning rate of new parameters, for pretrained "
                              "parameters it is 10 times smaller than this")
+    parser.add_argument('--np-ratio', type=int, default=3)
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
     parser.add_argument('--step-size', type=int, default=40)

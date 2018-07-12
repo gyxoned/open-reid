@@ -16,16 +16,9 @@ class MSMT17(Dataset_MSMT):
         if download:
             self.download()
 
-        # if not self._check_integrity():
-        #     raise RuntimeError("Dataset not found or corrupted. " +
-        #                        "You can use download=True to download it.")
-
         self.load(num_val)
 
     def download(self):
-        # if self._check_integrity():
-        #     print("Files already downloaded and verified")
-        #     return
 
         import re
         import hashlib
