@@ -20,7 +20,7 @@ class BaseTrainer(object):
         self.alpha = alpha
         self.grp_num = grp_num
 
-    def train(self, epoch, data_loader, optimizer, base_lr, warm_up=False, print_freq=1):
+    def train(self, epoch, data_loader, optimizer, base_lr=0.1, warm_up=False, print_freq=1):
         self.model.train()
 
         batch_time = AverageMeter()
@@ -86,10 +86,10 @@ class Trainer(BaseTrainer):
 
     def _forward(self, inputs, targets):
         outputs = self.model(*inputs)
-        num_classes = self.num_classes
-        Y = torch.zeros(targets.size(0), num_classes)
-        for i in range(targets.size(0)):
-            Y[i][targets[i].cpu().data] = 1.0
+        # num_classes = self.num_classes
+        # Y = torch.zeros(targets.size(0), num_classes)
+        # for i in range(targets.size(0)):
+        #     Y[i][targets[i].cpu().data] = 1.0
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, targets)
             prec, = accuracy(outputs.data, targets.data)

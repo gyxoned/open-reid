@@ -4,6 +4,7 @@ import os.path as osp
 
 import numpy as np
 import sys
+from bisect import bisect_right
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -37,8 +38,6 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
                              std=[0.229, 0.224, 0.225])
 
     train_set = dataset.trainval if combine_trainval else dataset.train
-    # num_classes = (dataset.num_trainval_ids if combine_trainval
-    #                else dataset.num_train_ids)
 
     train_transformer = T.Compose([
         # T.RandomSizedRectCrop(height, width),
@@ -116,20 +115,13 @@ def main(args):
               .format(start_epoch, best_mAP))
     model = nn.DataParallel(model).cuda()
 
-    # Distance metric
-    # metric = DistanceMetric(algorithm=args.dist_metric)
-
     # Evaluator
     evaluator = CascadeEvaluator(
         torch.nn.DataParallel(base_model).cuda(),
         embed_model,
         embed_dist_fn=lambda x: F.softmax(Variable(x)).data[:, 0])
     if args.evaluate:
-        # metric.train(model, train_loader)
-        # print("Validation:")
-        # evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
         print("Test:")
-        # evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
         evaluator.evaluate(test_loader, dataset.query, dataset.gallery, rerank_topk=100, dataset=args.dataset)
         return
 
@@ -137,13 +129,10 @@ def main(args):
     criterion = nn.CrossEntropyLoss().cuda()
 
     # Optimizer
-    # param_groups = [
-    #     {'params': model.module.base_model.parameters(), 'lr_mult': 0.1},
-    #     {'params': model.module.embed_model.parameters(), 'lr_mult': 1.0}]
-    optimizer = torch.optim.SGD([
-                               {'params': model.module.base_model.parameters()},
-                               {'params': model.module.embed_model.parameters(), 'lr': args.lr*10}
-                               ], args.lr, momentum=args.momentum,
+    param_groups = [
+        {'params': model.module.base_model.parameters(), 'lr_mult': 1.0},
+        {'params': model.module.embed_model.parameters(), 'lr_mult': 1.0}]
+    optimizer = torch.optim.SGD(param_groups, args.lr, momentum=args.momentum,
                                 weight_decay=args.weight_decay)
     # optimizer = torch.optim.Adam(param_groups, lr=args.lr,
     #                             weight_decay=args.weight_decay)
@@ -153,19 +142,14 @@ def main(args):
 
     # Schedule learning rate
     def adjust_lr(epoch):
-        # step_size = 60 if args.arch == 'inception' else 40
         lr = args.lr * (0.1 ** (epoch // args.step_size))
         for g in optimizer.param_groups:
-            g['lr'] = lr 
-            # * g.get('lr_mult', 1)
-        return lr
+            g['lr'] = lr * g.get('lr_mult', 1)
 
     # Start training
     for epoch in range(start_epoch, args.epochs):
-        lr = adjust_lr(epoch)
+        adjust_lr(epoch)
         trainer.train(epoch, train_loader, optimizer, base_lr=args.lr, warm_up=False)
-        # if epoch < args.start_save:
-        #     continue
         top1, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, dataset=args.dataset)
 
         is_best = mAP > best_mAP
