@@ -20,7 +20,7 @@ from reid.evaluators import Evaluator
 from reid.utils.data import transforms as T
 from reid.utils.data.preprocessor import Preprocessor
 from reid.utils.logging import Logger
-from reid.utils.serialization import load_checkpoint, save_checkpoint
+from reid.utils.serialization import load_checkpoint, save_checkpoint, copy_state_dict
 
 from reid.utils.data.sampler import RandomPairSampler, SubsetRandomSampler, RandomMultipleGallerySampler
 from reid.models.embedding import EltwiseSubEmbed
@@ -84,7 +84,7 @@ def main(args):
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
     else:
-        log_dir = osp.dirname(args.resume)
+        log_dir = osp.dirname(args.retrain)
         sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
     print("==========\nArgs:{}\n==========".format(args))
 
@@ -113,6 +113,13 @@ def main(args):
         best_mAP = checkpoint['best_mAP']
         print("=> Start epoch {}  best mAP {:.1%}"
               .format(start_epoch, best_mAP))
+
+    if args.retrain:
+        print('loading base part of pretrained model...')
+        checkpoint = load_checkpoint(args.retrain)
+        copy_state_dict(checkpoint, base_model, strip='module.base_model.')
+        print('loading embed part of pretrained model...')
+        copy_state_dict(checkpoint, embed_model, strip='module.embed_model.')
     model = nn.DataParallel(model).cuda()
 
     # Evaluator
@@ -204,6 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('--step-size', type=int, default=40)
     # training configs
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
+    parser.add_argument('--retrain', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluation only")
     parser.add_argument('--epochs', type=int, default=50)
