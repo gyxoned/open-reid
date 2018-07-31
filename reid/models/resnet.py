@@ -4,6 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from torch.nn import init
 import torchvision
+import torch
 
 
 __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
@@ -19,14 +20,15 @@ class ResNet(nn.Module):
         152: torchvision.models.resnet152,
     }
 
-    def __init__(self, depth, pretrained=True, cut_at_pooling=False,
+    def __init__(self, depth, pretrained=True, cut_at_pooling=False, sphere=False,
                  num_features=0, norm=False, dropout=0, num_classes=0):
         super(ResNet, self).__init__()
 
         self.depth = depth
         self.pretrained = pretrained
         self.cut_at_pooling = cut_at_pooling
-
+        self.sphere = sphere
+        self.eps = 1e-12
         # Construct base (pretrained) resnet
         if depth not in ResNet.__factory:
             raise KeyError("Unsupported depth:", depth)
@@ -47,17 +49,20 @@ class ResNet(nn.Module):
                 self.feat_bn = nn.BatchNorm1d(self.num_features)
                 init.kaiming_normal(self.feat.weight, mode='fan_out')
                 init.constant(self.feat.bias, 0)
-                init.constant(self.feat_bn.weight, 1)
-                init.constant(self.feat_bn.bias, 0)
             else:
                 # Change the num_features to CNN output channels
                 self.num_features = out_planes
+                self.feat_bn = nn.BatchNorm1d(self.num_features)
             if self.dropout > 0:
                 self.drop = nn.Dropout(self.dropout)
             if self.num_classes > 0:
-                self.classifier = nn.Linear(self.num_features, self.num_classes)
+                bias = not self.sphere
+                self.classifier = nn.Linear(self.num_features, self.num_classes, bias=bias)
                 init.normal(self.classifier.weight, std=0.001)
-                init.constant(self.classifier.bias, 0)
+                if not self.sphere:
+                    init.constant(self.classifier.bias, 0)
+        init.constant(self.feat_bn.weight, 1)
+        init.constant(self.feat_bn.bias, 0)
 
         if not self.pretrained:
             self.reset_params()
@@ -76,7 +81,7 @@ class ResNet(nn.Module):
 
         if self.has_embedding:
             x = self.feat(x)
-            x = self.feat_bn(x)
+        x = self.feat_bn(x)
         if self.norm:
             x = F.normalize(x)
         elif self.has_embedding:
@@ -84,8 +89,18 @@ class ResNet(nn.Module):
         if self.dropout > 0:
             x = self.drop(x)
         if self.num_classes > 0:
-            x = self.classifier(x)
-        return x
+            if not self.sphere:
+                s = self.classifier(x)
+            else:
+                x_norm = torch.norm(x, 2, dim=1, keepdim=True).expand_as(x)
+                x_normed = x / (x_norm + self.eps)
+                s = self.classifier(x_normed)
+                W = self.classifier.weight
+                W_norm = torch.norm(W, 2, dim=1, keepdim=True).permute(1,0).expand_as(s)
+                # W_normed = (W / W_norm)
+                # s = torch.matmul(x_normed, W_normed)
+                s = s / (W_norm + self.eps)
+        return s
 
     def reset_params(self):
         for m in self.modules():

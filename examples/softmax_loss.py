@@ -79,14 +79,14 @@ def main(args):
     # Create data loaders
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
-                                  (256, 128)
+                                  (384, 128)
     dataset, num_classes, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers,
                  args.combine_trainval)
 
     # Create model
-    model = models.create(args.arch, num_features=args.features,
+    model = models.create(args.arch, num_features=args.features, sphere=args.sphere,
                           dropout=args.dropout, num_classes=num_classes)
 
     # Load from checkpoint
@@ -126,18 +126,24 @@ def main(args):
             {'params': new_params, 'lr_mult': 1.0}]
     else:
         param_groups = model.parameters()
-    optimizer = torch.optim.SGD(param_groups, lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay,
-                                nesterov=True)
-
+    # optimizer = torch.optim.SGD(param_groups, lr=args.lr,
+    #                             momentum=args.momentum,
+    #                             weight_decay=args.weight_decay,
+    #                             nesterov=True)
+    #
+    optimizer = torch.optim.Adam(param_groups, lr=args.lr,
+                                 weight_decay=args.weight_decay)
     # Trainer
     trainer = Trainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
-        step_size = 60 if args.arch == 'inception' else 40
-        lr = args.lr * (0.1 ** (epoch // step_size))
+        step_size = args.ss if args.arch == 'inception' else 40
+        # For warm up learning rate
+        if epoch < 20:
+            lr = (epoch + 1) * (5e-4)
+        else:
+            lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
 
@@ -190,12 +196,15 @@ if __name__ == '__main__':
                         choices=models.names())
     parser.add_argument('--features', type=int, default=128)
     parser.add_argument('--dropout', type=float, default=0.5)
+    parser.add_argument('--sphere', action='store_true',
+                        help = "use sphere")
     # optimizer
     parser.add_argument('--lr', type=float, default=0.1,
                         help="learning rate of new parameters, for pretrained "
                              "parameters it is 10 times smaller than this")
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
+    parser.add_argument('--ss', type=int, default=80)
     # training configs
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
