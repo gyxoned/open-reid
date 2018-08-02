@@ -15,12 +15,13 @@ from reid.dist_metric import DistanceMetric
 from reid.trainers import Trainer
 from reid.evaluators import Evaluator
 from reid.utils.data import transforms as T
+from reid.utils.data.sampler import RandomMultipleGallerySampler
 from reid.utils.data.preprocessor import Preprocessor
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
-def get_data(name, split_id, data_dir, height, width, batch_size, workers,
+def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_instances,
              combine_trainval):
     root = osp.join(data_dir, name)
 
@@ -46,11 +47,17 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
         normalizer,
     ])
 
+    rmgs_flag = num_instances > 0
+    if rmgs_flag:
+        sampler_type = RandomMultipleGallerySampler(train_set, num_instances)
+    else:
+        sampler_type = None
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
         batch_size=batch_size, num_workers=workers,
-        shuffle=True, pin_memory=True, drop_last=True)
+        sampler=sampler_type,
+        shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
 
     val_loader = DataLoader(
         Preprocessor(dataset.val, root=dataset.images_dir,
@@ -77,12 +84,15 @@ def main(args):
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
 
     # Create data loaders
+    assert args.num_instances > 1, "num_instances should be greater than 1"
+    assert args.batch_size % args.num_instances == 0, \
+        'num_instances should divide batch_size'
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (384, 128)
     dataset, num_classes, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers,
+                 args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
     # Create model
@@ -122,8 +132,8 @@ def main(args):
         new_params = [p for p in model.parameters() if
                       id(p) not in base_param_ids]
         param_groups = [
-            {'params': model.module.base.parameters(), 'lr_mult': 0.1},
-            {'params': new_params, 'lr_mult': 1.0}]
+            {'params': model.module.base.parameters(), 'lr_mult': 1.0},
+            {'params': new_params, 'lr_mult': 10.0}]
     else:
         param_groups = model.parameters()
     # optimizer = torch.optim.SGD(param_groups, lr=args.lr,
@@ -138,12 +148,13 @@ def main(args):
 
     # Schedule learning rate
     def adjust_lr(epoch):
-        step_size = args.ss if args.arch == 'inception' else 40
+        step_size = 60 if args.arch == 'inception' else args.ss
         # For warm up learning rate
-        if epoch < 20:
-            lr = (epoch + 1) * (5e-4)
+        if epoch < step_size:
+            lr = (epoch + 1) * args.lr / (step_size)
         else:
             lr = args.lr * (0.1 ** (epoch // step_size))
+#        lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
 
@@ -191,6 +202,11 @@ if __name__ == '__main__':
     parser.add_argument('--combine-trainval', action='store_true',
                         help="train and val sets together for training, "
                              "val set alone for validation")
+    parser.add_argument('--num-instances', type=int, default=0,
+                        help="each minibatch consist of "
+                             "(batch_size // num_instances) identities, and "
+                             "each identity has num_instances instances, "
+                             "default: 0 (NOT USE)")
     # model
     parser.add_argument('-a', '--arch', type=str, default='resnet50',
                         choices=models.names())
