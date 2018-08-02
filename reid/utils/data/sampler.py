@@ -8,6 +8,11 @@ from torch.utils.data.sampler import (
     WeightedRandomSampler)
 
 
+def No_index(a, b):
+    assert isinstance(a, list)
+    return [i for i, j in enumerate(a) if j != b]
+
+
 class RandomIdentitySampler(Sampler):
     def __init__(self, data_source, num_instances=1):
         self.data_source = data_source
