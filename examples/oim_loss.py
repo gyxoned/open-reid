@@ -22,8 +22,8 @@ from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
-def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_instances,
-             combine_trainval):
+def get_data(name, split_id, data_dir, height, width, batch_size, workers,
+             combine_trainval, num_instances=0):
     root = osp.join(data_dir, name)
 
     dataset = datasets.create(name, root, split_id=split_id)
@@ -59,12 +59,13 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
         batch_size=batch_size, num_workers=workers,
-        shuffle=True, pin_memory=True, drop_last=True)
+        sampler=sampler_type,
+        shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
 
     val_loader = DataLoader(
         Preprocessor(dataset.val, root=dataset.images_dir,
                      transform=test_transformer),
-        batch_size=batch_size, num_workers=workers, sampler=sampler_type,
+        batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
     test_loader = DataLoader(
@@ -91,8 +92,8 @@ def main(args):
             (256, 128)
     dataset, num_classes, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers, args.num_instances,
-                 args.combine_trainval)
+                 args.width, args.batch_size, args.workers,
+                 args.combine_trainval, args.num_instances)
 
     # Create model
     model = models.create(args.arch, num_features=args.features, norm=True,
