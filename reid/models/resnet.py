@@ -20,14 +20,13 @@ class ResNet(nn.Module):
         152: torchvision.models.resnet152,
     }
 
-    def __init__(self, depth, pretrained=True, cut_at_pooling=False, sphere=False,
+    def __init__(self, depth, pretrained=True, cut_at_pooling=False,
                  num_features=0, norm=False, dropout=0, num_classes=0):
         super(ResNet, self).__init__()
 
         self.depth = depth
         self.pretrained = pretrained
         self.cut_at_pooling = cut_at_pooling
-        self.sphere = sphere
         self.eps = 1e-12
         # Construct base (pretrained) resnet
         if depth not in ResNet.__factory:
@@ -79,6 +78,9 @@ class ResNet(nn.Module):
         x = F.avg_pool2d(x, x.size()[2:])
         x = x.view(x.size(0), -1)
 
+        if self.training is False:
+            return x
+
         if self.has_embedding:
             x = self.feat(x)
         x = self.feat_bn(x)
@@ -89,18 +91,8 @@ class ResNet(nn.Module):
         if self.dropout > 0:
             x = self.drop(x)
         if self.num_classes > 0:
-            if not self.sphere:
-                s = self.classifier(x)
-            else:
-                x_norm = torch.norm(x, 2, dim=1, keepdim=True).expand_as(x)
-                x_normed = x / (x_norm + self.eps)
-                s = self.classifier(x_normed)
-                W = self.classifier.weight
-                W_norm = torch.norm(W, 2, dim=1, keepdim=True).permute(1,0).expand_as(s)
-                # W_normed = (W / W_norm)
-                # s = torch.matmul(x_normed, W_normed)
-                s = s / (W_norm + self.eps)
-        return s
+            x = self.classifier(x)
+        return x
 
     def reset_params(self):
         for m in self.modules():

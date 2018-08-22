@@ -17,11 +17,12 @@ from reid.trainers import Trainer
 from reid.evaluators import Evaluator
 from reid.utils.data import transforms as T
 from reid.utils.data.preprocessor import Preprocessor
+from reid.utils.data.sampler import RandomMultipleGallerySampler
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
-def get_data(name, split_id, data_dir, height, width, batch_size, workers,
+def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_instances,
              combine_trainval):
     root = osp.join(data_dir, name)
 
@@ -36,6 +37,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
 
     train_transformer = T.Compose([
         T.RandomSizedRectCrop(height, width),
+        T.RandomSizedEarser(),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,
@@ -47,6 +49,12 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
         normalizer,
     ])
 
+    rmgs_flag = num_instances > 0
+    if rmgs_flag:
+        sampler_type = RandomMultipleGallerySampler(train_set, num_instances)
+    else:
+        sampler_type = None
+
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
@@ -56,7 +64,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers,
     val_loader = DataLoader(
         Preprocessor(dataset.val, root=dataset.images_dir,
                      transform=test_transformer),
-        batch_size=batch_size, num_workers=workers,
+        batch_size=batch_size, num_workers=workers, sampler=sampler_type,
         shuffle=False, pin_memory=True)
 
     test_loader = DataLoader(
@@ -83,7 +91,7 @@ def main(args):
             (256, 128)
     dataset, num_classes, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers,
+                 args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
     # Create model
@@ -188,6 +196,11 @@ if __name__ == '__main__':
     parser.add_argument('--combine-trainval', action='store_true',
                         help="train and val sets together for training, "
                              "val set alone for validation")
+    parser.add_argument('--num-instances', type=int, default=0,
+                        help="each minibatch consist of "
+                             "(batch_size // num_instances) identities, and "
+                             "each identity has num_instances instances, "
+                             "default: 0 (NOT USE)")
     # model
     parser.add_argument('-a', '--arch', type=str, default='resnet50',
                         choices=models.names())
