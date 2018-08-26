@@ -100,14 +100,14 @@ def main(args):
                           dropout=args.dropout)
 
     # Load from checkpoint
-    start_epoch = best_top1 = 0
+    start_epoch = best_mAP = 0
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
         start_epoch = checkpoint['epoch']
-        best_top1 = checkpoint['best_top1']
-        print("=> Start epoch {}  best top1 {:.1%}"
-              .format(start_epoch, best_top1))
+        best_mAP = checkpoint['best_mAP']
+        print("=> Start epoch {}  best mAP {:.1%}"
+              .format(start_epoch, best_mAP))
     model = nn.DataParallel(model).cuda()
 
     # Distance metric
@@ -134,7 +134,7 @@ def main(args):
         new_params = [p for p in model.parameters() if
                       id(p) not in base_param_ids]
         param_groups = [
-            {'params': model.module.base.parameters(), 'lr_mult': 0.1},
+            {'params': model.module.base.parameters(), 'lr_mult': 1.0},
             {'params': new_params, 'lr_mult': 1.0}]
     else:
         param_groups = model.parameters()
@@ -148,8 +148,8 @@ def main(args):
 
     # Schedule learning rate
     def adjust_lr(epoch):
-        step_size = 60 if args.arch == 'inception' else 40
-        lr = args.lr * (0.1 ** (epoch // step_size))
+        # step_size = 60 if args.arch == 'inception' else 40
+        lr = args.lr * (0.1 ** (epoch // 20))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
 
@@ -159,22 +159,23 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        top1 = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        if (epoch % 6 == 0):
+            mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
 
-        is_best = top1 > best_top1
-        best_top1 = max(top1, best_top1)
-        save_checkpoint({
-            'state_dict': model.module.state_dict(),
-            'epoch': epoch + 1,
-            'best_top1': best_top1,
-        }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+            is_best = mAP > best_mAP
+            best_mAP = max(mAP, best_mAP)
+            save_checkpoint({
+                'state_dict': model.module.state_dict(),
+                'epoch': epoch + 1,
+                'best_mAP': best_mAP,
+            }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-        print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, top1, best_top1, ' *' if is_best else ''))
+            print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+                  format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    print('Test with best model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    print('Test with last model:')
+    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'checkpoint.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     metric.train(model, train_loader)
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
