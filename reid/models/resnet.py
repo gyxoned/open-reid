@@ -78,19 +78,15 @@ class ResNet(nn.Module):
         x = F.avg_pool2d(x, x.size()[2:])
         x = x.view(x.size(0), -1)
 
-        # if self.training is False:
-        #     return x
-
         if self.has_embedding:
             x = self.feat(x)
         x = self.feat_bn(x)
-        x = x / x.norm(2, 1).unsqueeze(1).expand_as(x)
-        if self.training is False:
-            return x
         if self.norm:
             x = F.normalize(x)
         elif self.has_embedding:
             x = F.relu(x)
+        if self.training is False:
+            return x
         if self.dropout > 0:
             x = self.drop(x)
         if self.num_classes > 0:

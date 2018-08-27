@@ -184,10 +184,10 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="OIM loss")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='cuhk03',
+    parser.add_argument('-d', '--dataset', type=str, default='market1501',
                         choices=datasets.names())
     parser.add_argument('-b', '--batch-size', type=int, default=256)
-    parser.add_argument('-j', '--workers', type=int, default=4)
+    parser.add_argument('-j', '--workers', type=int, default=8)
     parser.add_argument('--split', type=int, default=0)
     parser.add_argument('--height', type=int,
                         help="input height, default: 256 for resnet*, "
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     # model
     parser.add_argument('-a', '--arch', type=str, default='resnet50',
                         choices=models.names())
-    parser.add_argument('--features', type=int, default=128)
+    parser.add_argument('--features', type=int, default=256)
     parser.add_argument('--dropout', type=float, default=0.5)
     # loss
     parser.add_argument('--oim-scalar', type=float, default=30,
