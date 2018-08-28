@@ -36,6 +36,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
 
     train_transformer = T.Compose([
         T.RandomSizedRectCrop(height, width),
+        T.RandomSizedEarser(),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,
@@ -96,9 +97,7 @@ def main(args):
                  args.combine_trainval)
 
     # Create model
-    model = models.create(args.arch, num_features=args.features, sphere=args.sphere,
-                          dropout=args.dropout, num_classes=num_classes)
-
+    model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
     # Load from checkpoint
     start_epoch = best_top1 = 0
     if args.resume:
@@ -136,13 +135,13 @@ def main(args):
             {'params': new_params, 'lr_mult': 10.0}]
     else:
         param_groups = model.parameters()
-    # optimizer = torch.optim.SGD(param_groups, lr=args.lr,
-    #                             momentum=args.momentum,
-    #                             weight_decay=args.weight_decay,
-    #                             nesterov=True)
-    #
-    optimizer = torch.optim.Adam(param_groups, lr=args.lr,
-                                 weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(param_groups, lr=args.lr,
+                                momentum=args.momentum,
+                                weight_decay=args.weight_decay,
+                                nesterov=True)
+   
+    #optimizer = torch.optim.Adam(param_groups, lr=args.lr,
+    #                             weight_decay=args.weight_decay)
     # Trainer
     trainer = Trainer(model, criterion)
 
@@ -150,11 +149,11 @@ def main(args):
     def adjust_lr(epoch):
         step_size = 60 if args.arch == 'inception' else args.ss
         # For warm up learning rate
-        if epoch < step_size:
-            lr = (epoch + 1) * args.lr / (step_size)
-        else:
-            lr = args.lr * (0.1 ** (epoch // step_size))
-#        lr = args.lr * (0.1 ** (epoch // step_size))
+        #if epoch < step_size:
+        #    lr = (epoch + 1) * args.lr / (step_size)
+        #else:
+        #    lr = args.lr * (0.1 ** (epoch // step_size))
+        lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
 
@@ -220,12 +219,12 @@ if __name__ == '__main__':
                              "parameters it is 10 times smaller than this")
     parser.add_argument('--momentum', type=float, default=0.9)
     parser.add_argument('--weight-decay', type=float, default=5e-4)
-    parser.add_argument('--ss', type=int, default=80)
+    parser.add_argument('--ss', type=int, default=20)
     # training configs
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluation only")
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=70)
     parser.add_argument('--start_save', type=int, default=0,
                         help="start saving checkpoints after specific epoch")
     parser.add_argument('--seed', type=int, default=1)

@@ -55,11 +55,9 @@ class ResNet(nn.Module):
             if self.dropout > 0:
                 self.drop = nn.Dropout(self.dropout)
             if self.num_classes > 0:
-                bias = not self.sphere
-                self.classifier = nn.Linear(self.num_features, self.num_classes, bias=bias)
+                self.classifier = nn.Linear(self.num_features, self.num_classes, bias=True)
                 init.normal(self.classifier.weight, std=0.001)
-                if not self.sphere:
-                    init.constant(self.classifier.bias, 0)
+                init.constant(self.classifier.bias, 0)
         init.constant(self.feat_bn.weight, 1)
         init.constant(self.feat_bn.bias, 0)
 
