@@ -83,6 +83,10 @@ def main(args):
     # Redirect print to both console and log file
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
+    else:
+        log_dir = osp.dirname(args.resume)
+        sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
+    print("==========\nArgs:{}\n==========".format(args))
 
     # Create data loaders
     assert args.num_instances > 1, "num_instances should be greater than 1"
@@ -90,7 +94,7 @@ def main(args):
         'num_instances should divide batch_size'
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
-                                  (384, 128)
+                                  (256, 128)
     dataset, num_classes, train_loader, val_loader, test_loader = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
@@ -99,21 +103,21 @@ def main(args):
     # Create model
     model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
     # Load from checkpoint
-    start_epoch = best_top1 = 0
+    start_epoch = best_mAP = 0
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
         start_epoch = checkpoint['epoch']
-        best_top1 = checkpoint['best_top1']
-        print("=> Start epoch {}  best top1 {:.1%}"
-              .format(start_epoch, best_top1))
+        best_mAP = checkpoint['best_mAP']
+        print("=> Start epoch {}  best mAP {:.1%}"
+              .format(start_epoch, best_mAP))
     model = nn.DataParallel(model).cuda()
 
     # Distance metric
     metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model)
+    evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
         metric.train(model, train_loader)
         print("Validation:")
@@ -163,18 +167,18 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        top1 = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
 
-        is_best = top1 > best_top1
-        best_top1 = max(top1, best_top1)
+        is_best = mAP > best_mAP
+        best_mAP = max(mAP, best_mAP)
         save_checkpoint({
             'state_dict': model.module.state_dict(),
             'epoch': epoch + 1,
-            'best_top1': best_top1,
+            'best_mAP': best_mAP,
         }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-        print('\n * Finished epoch {:3d}  top1: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, top1, best_top1, ' *' if is_best else ''))
+        print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
     print('Test with best model:')

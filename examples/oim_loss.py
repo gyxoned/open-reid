@@ -85,6 +85,10 @@ def main(args):
     # Redirect print to both console and log file
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
+    else:
+        log_dir = osp.dirname(args.resume)
+        sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
+    print("==========\nArgs:{}\n==========".format(args))
 
     # Create data loaders
     if args.height is None or args.width is None:
@@ -114,7 +118,7 @@ def main(args):
     metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model)
+    evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
         metric.train(model, train_loader)
         print("Validation:")
@@ -160,7 +164,7 @@ def main(args):
         if epoch < args.start_save:
             continue
         if (epoch % 6 == 0):
-            mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+            _, mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
 
             is_best = mAP > best_mAP
             best_mAP = max(mAP, best_mAP)
