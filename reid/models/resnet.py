@@ -79,12 +79,13 @@ class ResNet(nn.Module):
         if self.has_embedding:
             x = self.feat(x)
         x = self.feat_bn(x)
+        if self.training is False:
+            x = F.normalize(x)
+            return x
         if self.norm:
             x = F.normalize(x)
         elif self.has_embedding:
             x = F.relu(x)
-        if self.training is False:
-            return x
         if self.dropout > 0:
             x = self.drop(x)
         if self.num_classes > 0:
