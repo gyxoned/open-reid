@@ -193,7 +193,7 @@ if __name__ == '__main__':
     # data
     parser.add_argument('-d', '--dataset', type=str, default='cuhk03',
                         choices=datasets.names())
-    parser.add_argument('-b', '--batch-size', type=int, default=256)
+    parser.add_argument('-b', '--batch-size', type=int, default=112)
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('--split', type=int, default=0)
     parser.add_argument('--height', type=int,
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument('--combine-trainval', action='store_true',
                         help="train and val sets together for training, "
                              "val set alone for validation")
-    parser.add_argument('--num-instances', type=int, default=0,
+    parser.add_argument('--num-instances', type=int, default=7,
                         help="each minibatch consist of "
                              "(batch_size // num_instances) identities, and "
                              "each identity has num_instances instances, "
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     # model
     parser.add_argument('-a', '--arch', type=str, default='resnet50',
                         choices=models.names())
-    parser.add_argument('--features', type=int, default=128)
+    parser.add_argument('--features', type=int, default=256)
     parser.add_argument('--dropout', type=float, default=0.5)
     parser.add_argument('--sphere', action='store_true',
                         help = "use sphere")
