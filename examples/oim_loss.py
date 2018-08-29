@@ -163,23 +163,29 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        if (epoch % 6 == 0):
-            _, mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+        # if (epoch % 6 == 0):
+        # _, mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
 
-            is_best = mAP > best_mAP
-            best_mAP = max(mAP, best_mAP)
-            save_checkpoint({
-                'state_dict': model.module.state_dict(),
-                'epoch': epoch + 1,
-                'best_mAP': best_mAP,
-            }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+        is_best = mAP > best_mAP
+        best_mAP = max(mAP, best_mAP)
+        save_checkpoint({
+            'state_dict': model.module.state_dict(),
+            'epoch': epoch + 1,
+            'best_mAP': best_mAP,
+        }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-            print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
-                  format(epoch, mAP, best_mAP, ' *' if is_best else ''))
+        print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    print('Test with last model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+    # print('Test with last model:')
+    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+    # model.module.load_state_dict(checkpoint['state_dict'])
+    # metric.train(model, train_loader)
+    # evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+    print('Test with best model:')
+    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     metric.train(model, train_loader)
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
