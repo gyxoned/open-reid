@@ -110,7 +110,7 @@ def evaluate_all(distmat, query=None, gallery=None,
         return cmc_scores['allshots'][0], mAP
     else:
 
-        if (dataset == 'cuhk03'):
+        if (dataset == 'cuhk03') or (dataset == 'cuhk03np'):
             cmc_configs = {
                 'cuhk03': dict(separate_camera_set=True,
                                   single_gallery_shot=True,
