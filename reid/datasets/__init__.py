@@ -6,6 +6,7 @@ from .cuhk03 import CUHK03
 from .cuhk03np import CUHK03NP
 from .dukemtmc import DukeMTMC
 from .market1501 import Market1501
+from .msmt17 import MSMT17
 from .viper import VIPeR
 
 
@@ -16,6 +17,7 @@ __factory = {
     'cuhk03np': CUHK03NP,
     'market1501': Market1501,
     'dukemtmc': DukeMTMC,
+    'msmt17': MSMT17,
 }
 
 
