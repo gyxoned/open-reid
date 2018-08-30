@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 import os.path as osp
+import tarfile
 
 from ..utils.data import Dataset_MSMT
 from ..utils.osutils import mkdir_if_missing
@@ -42,5 +43,6 @@ class MSMT17(Dataset_MSMT):
         exdir = osp.join(raw_dir, 'MSMT17_V1')
         if not osp.isdir(exdir):
             print("Extracting zip file")
-            with ZipFile(fpath) as z:
-                z.extractall(path=raw_dir)
+            tar = tarfile.open(fpath, "r:gz")
+            tar.extractall()
+            tar.close()
