@@ -44,5 +44,5 @@ class MSMT17(Dataset_MSMT):
         if not osp.isdir(exdir):
             print("Extracting zip file")
             tar = tarfile.open(fpath, "r:gz")
-            tar.extractall()
+            tar.extractall(path=raw_dir)
             tar.close()
