@@ -24,7 +24,7 @@ class CUHK03NP(object):
     Reference:
     Li et al. DeepReID: Deep Filter Pairing Neural Network for Person Re-identification. CVPR 2014.
     URL: http://www.ee.cuhk.edu.hk/~xgwang/CUHK_identification.html#!
-    
+
     Dataset statistics:
     # identities: 1360
     # images: 13164
@@ -42,16 +42,16 @@ class CUHK03NP(object):
         # osp.join(root, 'raw')
         self.data_dir = osp.join(self.dataset_dir, 'raw', 'cuhk03_release')
         self.raw_mat_path = osp.join(self.data_dir, 'cuhk-03.mat')
-        
+
         self.imgs_detected_dir = osp.join(self.dataset_dir, 'images_detected')
         self.imgs_labeled_dir = osp.join(self.dataset_dir, 'images_labeled')
-        
+
         # self.split_classic_det_json_path = osp.join(self.dataset_dir, 'splits_classic_detected.json')
         # self.split_classic_lab_json_path = osp.join(self.dataset_dir, 'splits_classic_labeled.json')
-        
+
         # self.split_new_det_json_path = osp.join(self.dataset_dir, 'splits_new_detected.json')
         # self.split_new_lab_json_path = osp.join(self.dataset_dir, 'splits_new_labeled.json')
-        
+
         self.split_new_det_mat_path = osp.join(self.dataset_dir, 'raw', 'cuhk03_new_protocol_config_detected.mat')
         self.split_new_lab_mat_path = osp.join(self.dataset_dir, 'raw', 'cuhk03_new_protocol_config_labeled.mat')
 
@@ -209,7 +209,7 @@ class CUHK03NP(object):
         #     num_train_pids, num_test_pids = 0, 0
         #     num_train_imgs, num_test_imgs = 0, 0
         #     for i, (campid, pid, img_paths) in enumerate(meta_data):
-                
+
         #         if [campid, pid] in test_split:
         #             for img_path in img_paths:
         #                 camid = int(osp.basename(img_path).split('_')[2])
@@ -249,7 +249,7 @@ class CUHK03NP(object):
         #             'num_query_pids': num_test_pids, 'num_query_imgs': num_test_imgs,
         #             'num_gallery_pids': num_test_pids, 'num_gallery_imgs': num_test_imgs,
         #         })
-            
+
         #     write_json(splits_classic_det, self.split_classic_det_json_path)
         #     write_json(splits_classic_lab, self.split_classic_lab_json_path)
 
@@ -271,7 +271,7 @@ class CUHK03NP(object):
         def _extract_new_split(split_dict, img_dir, num_val=100):
             trainval_idxs = split_dict['train_idx'].flatten() - 1 # index-0
             pids = split_dict['labels'].flatten()
-            trainval_pids = list(set(pids[trainval_idxs]))
+            trainval_pids = sorted(list(set(pids[trainval_idxs])))
 
             train_pids = sorted(trainval_pids[:-num_val])
             val_pids = sorted(trainval_pids[-num_val:])
