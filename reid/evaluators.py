@@ -42,13 +42,13 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
 
 class ABN_Parameters(object):
     def __init__(self, dim):
-        self.running_mean = torch.zeros(dim).float()
-        self.running_var = torch.ones(dim).float()
+        self.running_mean = torch.zeros(dim).float().cuda()
+        self.running_var = torch.ones(dim).float().cuda()
         self.count = 0
 
     def reset(self):
-        self.running_mean = torch.zeros(dim).float()
-        self.running_var = torch.ones(dim).float()
+        self.running_mean = torch.zeros(dim).float().cuda()
+        self.running_var = torch.ones(dim).float().cuda()
         self.count = 0
 
     def update(self, mean, var, k=1):
@@ -97,8 +97,8 @@ def adapt_source_bn(model, data_loader, print_freq=1):
 
     for idx, m in enumerate(model.modules()):
       if m.__class__.__name__.find('BatchNorm') != -1:
-        m.state_dict()['running_mean']=abn_param[idx].running_mean.cuda()
-        m.state_dict()['running_var']=abn_param[idx].running_var.cuda()
+        m.state_dict()['running_mean']=abn_param[idx].running_mean
+        m.state_dict()['running_var']=abn_param[idx].running_var
 
 def pairwise_distance(features, query=None, gallery=None, metric=None):
     if query is None and gallery is None:

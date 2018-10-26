@@ -40,8 +40,8 @@ def extract_bn_responses(model, input):
             inputs[id(m)] = None
             outputs[id(m)] = None
             def func(m, i, o): 
-                inputs[id(m)] = i[0].data.cpu()
-                outputs[id(m)] = o.data.cpu()
+                inputs[id(m)] = i[0].data
+                outputs[id(m)] = o.data
             handles.append(m.register_forward_hook(func))
     model.module.forward(input)
     for h in handles:
