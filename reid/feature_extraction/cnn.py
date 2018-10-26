@@ -35,8 +35,8 @@ def extract_bn_responses(model, input):
     module_name = OrderedDict()
     handles = []
     for n, m in model.named_modules():
-        module_name[id(m)] = n
         if m.__class__.__name__.find('BatchNorm') != -1:
+            module_name[id(m)] = n
             inputs[id(m)] = None
             outputs[id(m)] = None
             def func(m, i, o): 
@@ -46,4 +46,5 @@ def extract_bn_responses(model, input):
     model.module.forward(input)
     for h in handles:
         h.remove()
-    return list(inputs.values()), list(outputs.values())
+    return inputs, outputs, module_name
+    # return list(inputs.values()), list(outputs.values())

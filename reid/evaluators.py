@@ -67,22 +67,24 @@ def adapt_source_bn(model, data_loader, print_freq=1):
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
-    abn_param = []
-    for m in model.modules():
+    abn_param = OrderedDict()
+    for n, m in model.named_modules():
       if m.__class__.__name__.find('BatchNorm') != -1:
-        abn_param.append(ABN_Parameters(m.num_features))
+        abn_param[n] = ABN_Parameters(m.num_features)
 
     end = time.time()
     for i, (imgs, fnames, pids, _) in enumerate(data_loader):
         data_time.update(time.time() - end)
 
-        bn_inputs, _ = extract_bn_responses(model, imgs)
-        for idx, bn_res in enumerate(bn_inputs):
+        bn_inputs, _, names = extract_bn_responses(model, imgs)
+        for mid, bn_res in bn_inputs.items():
+            import pdb
+            pdb.set_trace()
             c = bn_res.size(1)
             bn_res = bn_res.transpose_(1,-1).contiguous().view(-1,c)
             mean = bn_res.mean(0)
             var = bn_res.var(0)
-            abn_param[idx].update(mean, var, data_loader.batch_size)
+            abn_param[names[mid]].update(mean, var, data_loader.batch_size)
 
         batch_time.update(time.time() - end)
         end = time.time()
@@ -95,10 +97,10 @@ def adapt_source_bn(model, data_loader, print_freq=1):
                           batch_time.val, batch_time.avg,
                           data_time.val, data_time.avg))
 
-    for idx, m in enumerate(model.modules()):
+    for n, m in model.named_modules():
       if m.__class__.__name__.find('BatchNorm') != -1:
-        m.state_dict()['running_mean']=abn_param[idx].running_mean
-        m.state_dict()['running_var']=abn_param[idx].running_var
+        m.state_dict()['running_mean']=abn_param[n].running_mean
+        m.state_dict()['running_var']=abn_param[n].running_var
 
 def pairwise_distance(features, query=None, gallery=None, metric=None):
     if query is None and gallery is None:
