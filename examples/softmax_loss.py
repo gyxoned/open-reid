@@ -89,9 +89,9 @@ def main(args):
     print("==========\nArgs:{}\n==========".format(args))
 
     # Create data loaders
-    assert args.num_instances > 1, "num_instances should be greater than 1"
-    assert args.batch_size % args.num_instances == 0, \
-        'num_instances should divide batch_size'
+    #assert args.num_instances > 1, "num_instances should be greater than 1"
+    #assert args.batch_size % args.num_instances == 0, \
+    #    'num_instances should divide batch_size'
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)

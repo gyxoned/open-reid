@@ -95,12 +95,12 @@ def main(args):
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset, num_classes, train_loader, _, _ = \
+    dataset, num_classes, train_loader, val_loader, _ = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
-    dataset_ul, _, _, val_loader, test_loader = \
+    dataset_ul, _, _, _, test_loader = \
         get_data(args.dataset_ul, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances, False)
 
@@ -121,11 +121,11 @@ def main(args):
     #metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model, dataset=args.dataset_ul)
+    evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
         #metric.train(model, train_loader)
-        print("Validation:")
-        evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
+        #print("Validation:")
+        #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
         print("Test:")
         evaluator.evaluate(test_loader, dataset_ul.query, dataset_ul.gallery)
         return
@@ -171,7 +171,7 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        _, mAP = evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
+        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
