@@ -13,7 +13,7 @@ from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
 from reid.trainers import Trainer
-from reid.evaluators import Evaluator
+from reid.evaluators import Evaluator, Evaluator_ABN
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
 from reid.utils.data.preprocessor import Preprocessor
@@ -121,7 +121,7 @@ def main(args):
     #metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model, dataset=args.dataset)
+    evaluator = Evaluator_ABN(model, dataset=args.dataset)
     if args.evaluate:
         #metric.train(model, train_loader)
         #print("Validation:")
@@ -199,7 +199,7 @@ if __name__ == '__main__':
                         choices=datasets.names())
     parser.add_argument('-du', '--dataset-ul', type=str, default='dukemtmc',
                         choices=datasets.names())
-    parser.add_argument('-b', '--batch-size', type=int, default=64)
+    parser.add_argument('-b', '--batch-size', type=int, default=16)
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('--split', type=int, default=0)
     parser.add_argument('--height', type=int,

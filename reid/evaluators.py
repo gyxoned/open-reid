@@ -3,9 +3,10 @@ import time
 from collections import OrderedDict
 
 import torch
+from torch.autograd import Variable
 
 from .evaluation_metrics import cmc, mean_ap
-from .feature_extraction import extract_cnn_feature
+from .feature_extraction import extract_cnn_feature, extract_bn_responses
 from .utils.meters import AverageMeter
 
 
@@ -39,6 +40,65 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
 
     return features, labels
 
+class ABN_Parameters(object):
+    def __init__(self, dim):
+        self.running_mean = torch.zeros(dim).float()
+        self.running_var = torch.ones(dim).float()
+        self.count = 0
+
+    def reset(self):
+        self.running_mean = torch.zeros(dim).float()
+        self.running_var = torch.ones(dim).float()
+        self.count = 0
+
+    def update(self, mean, var, k=1):
+        assert(k>0)
+        d = mean - self.running_mean
+        if self.count==0:
+          self.running_mean = d
+        else:
+          self.running_mean = self.running_mean + d*k/self.count
+        self.running_var = self.running_var*self.count/(self.count+k) + \
+                            var*k/(self.count+k) + d**2*self.count*k/(self.count+k)**2
+        self.count = self.count + k
+
+def adapt_source_bn(model, data_loader, print_freq=1):
+    model.eval()
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+
+    abn_param = []
+    for m in model.modules():
+      if m.__class__.__name__.find('BatchNorm') != -1:
+        abn_param.append(ABN_Parameters(m.num_features))
+
+    end = time.time()
+    for i, (imgs, fnames, pids, _) in enumerate(data_loader):
+        data_time.update(time.time() - end)
+
+        bn_inputs, _ = extract_bn_responses(model, imgs)
+        for idx, bn_res in enumerate(bn_inputs):
+            c = bn_res.size(1)
+            bn_res = bn_res.transpose_(1,-1).contiguous().view(-1,c)
+            mean = bn_res.mean(0)
+            var = bn_res.var(0)
+            abn_param[idx].update(mean, var, data_loader.batch_size)
+
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if (i + 1) % print_freq == 0:
+            print('Extract BN Respones: [{}/{}]\t'
+                  'Time {:.3f} ({:.3f})\t'
+                  'Data {:.3f} ({:.3f})\t'
+                  .format(i + 1, len(data_loader),
+                          batch_time.val, batch_time.avg,
+                          data_time.val, data_time.avg))
+
+    for idx, m in enumerate(model.modules()):
+      if m.__class__.__name__.find('BatchNorm') != -1:
+        m.state_dict()['running_mean']=abn_param[idx].running_mean
+        m.state_dict()['running_var']=abn_param[idx].running_var
 
 def pairwise_distance(features, query=None, gallery=None, metric=None):
     if query is None and gallery is None:
@@ -180,6 +240,19 @@ class Evaluator(object):
         self.dataset = dataset
 
     def evaluate(self, data_loader, query, gallery, metric=None):
+        features, _ = extract_features(self.model, data_loader)
+        distmat = pairwise_distance(features, query, gallery, metric=metric)
+        return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset)
+
+class Evaluator_ABN(object):
+    def __init__(self, model, dataset=None):
+        super(Evaluator_ABN, self).__init__()
+        self.model = model
+        self.dataset = dataset
+
+    def evaluate(self, data_loader, query, gallery, metric=None):
+        adapt_source_bn(self.model, data_loader)
+
         features, _ = extract_features(self.model, data_loader)
         distmat = pairwise_distance(features, query, gallery, metric=metric)
         return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset)
