@@ -78,8 +78,6 @@ def adapt_source_bn(model, data_loader, print_freq=1):
 
         bn_inputs, _, names = extract_bn_responses(model, imgs)
         for mid, bn_res in bn_inputs.items():
-            import pdb
-            pdb.set_trace()
             c = bn_res.size(1)
             bn_res = bn_res.transpose_(1,-1).contiguous().view(-1,c)
             mean = bn_res.mean(0)
