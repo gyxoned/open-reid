@@ -241,41 +241,6 @@ def adapt_source_bn(model, data_loader, print_freq=10):
             model.state_dict()[n+'.running_mean'].copy_(abn_param.running_mean)
             model.state_dict()[n+'.running_var'].copy_(abn_param.running_var)
 
-# def adapt_source_bn(model, data_loader, print_freq=1):
-#     model.eval()
-#     batch_time = AverageMeter()
-#     data_time = AverageMeter()
-
-#     abn_param = OrderedDict()
-
-#     end = time.time()
-#     for i, (imgs, fnames, pids, _) in enumerate(data_loader):
-#         data_time.update(time.time() - end)
-
-#         bn_inputs, _, names = extract_bn_responses(model, imgs)
-#         for mid, bn_res in bn_inputs.items():
-#             c = bn_res.size(1)
-#             if names[mid] not in abn_param.keys(): abn_param[names[mid]] = ABN_Parameters(c)
-#             bn_res = bn_res.transpose_(1,-1).contiguous().view(-1,c)
-#             mean = bn_res.mean(0)
-#             var = bn_res.var(0)
-#             abn_param[names[mid]].update(mean, var, data_loader.batch_size)
-
-#         batch_time.update(time.time() - end)
-#         end = time.time()
-
-#         if (i + 1) % print_freq == 0:
-#             print('Extract BN Respones: [{}/{}]\t'
-#                   'Time {:.3f} ({:.3f})\t'
-#                   'Data {:.3f} ({:.3f})\t'
-#                   .format(i + 1, len(data_loader),
-#                           batch_time.val, batch_time.avg,
-#                           data_time.val, data_time.avg))
-#     #return abn_param
-#     for n, param in abn_param.items():
-#         model.state_dict()[n+'.running_mean'].copy_(param.running_mean)
-#         model.state_dict()[n+'.running_var'].copy_(param.running_var)
-
 class Evaluator_ABN(object):
     def __init__(self, model, dataset='market1501'):
         super(Evaluator_ABN, self).__init__()
