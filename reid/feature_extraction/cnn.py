@@ -25,26 +25,38 @@ def extract_cnn_feature(model, inputs, modules=None):
         h.remove()
     return list(outputs.values())
 
-def extract_bn_responses(model, input):
+# def extract_bn_responses(model, input):
+#     model.eval()
+#     input = to_torch(input)
+#     input = Variable(input, volatile=True).cuda()
+
+#     outputs = OrderedDict()
+#     inputs = OrderedDict()
+#     module_name = OrderedDict()
+#     handles = []
+#     for n, m in model.named_modules():
+#         if m.__class__.__name__.find('BatchNorm') != -1:
+#             module_name[id(m)] = n
+#             inputs[id(m)] = None
+#             outputs[id(m)] = None
+#             def func(m, i, o): 
+#                 inputs[id(m)] = i[0].data
+#                 outputs[id(m)] = o.data
+#             handles.append(m.register_forward_hook(func))
+#     model.module.forward(input)
+#     for h in handles:
+#         h.remove()
+#     return inputs, outputs, module_name
+    # return list(inputs.values()), list(outputs.values())
+
+def extract_bn_responses(model, input, modules):
     model.eval()
     input = to_torch(input)
     input = Variable(input, volatile=True).cuda()
 
-    outputs = OrderedDict()
-    inputs = OrderedDict()
-    module_name = OrderedDict()
-    handles = []
-    for n, m in model.named_modules():
-        if m.__class__.__name__.find('BatchNorm') != -1:
-            module_name[id(m)] = n
-            inputs[id(m)] = None
-            outputs[id(m)] = None
-            def func(m, i, o): 
-                inputs[id(m)] = i[0].data
-                outputs[id(m)] = o.data
-            handles.append(m.register_forward_hook(func))
+    inputs = []
+    def func(m, i): inputs.append(i[0].data)
+    handle=modules.register_forward_pre_hook(func)
     model.module.forward(input)
-    for h in handles:
-        h.remove()
-    return inputs, outputs, module_name
-    # return list(inputs.values()), list(outputs.values())
+    handle.remove()
+    return inputs[0]
