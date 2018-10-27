@@ -191,9 +191,28 @@ def adapt_source_bn(model, data_loader, print_freq=10):
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
+    all_bn_modules = ['module.base.bn1', 'module.base.layer1.0.bn1', 'module.base.layer1.0.bn2', 'module.base.layer1.0.bn3', 
+                    'module.base.layer1.0.downsample.1', 'module.base.layer1.1.bn1', 'module.base.layer1.1.bn2', 'module.base.layer1.1.bn3', 
+                    'module.base.layer1.2.bn1', 'module.base.layer1.2.bn2', 'module.base.layer1.2.bn3', 'module.base.layer2.0.bn1', 
+                    'module.base.layer2.0.bn2', 'module.base.layer2.0.bn3', 'module.base.layer2.0.downsample.1', 'module.base.layer2.1.bn1', 
+                    'module.base.layer2.1.bn2', 'module.base.layer2.1.bn3', 'module.base.layer2.2.bn1', 'module.base.layer2.2.bn2', 
+                    'module.base.layer2.2.bn3', 'module.base.layer2.3.bn1', 'module.base.layer2.3.bn2', 'module.base.layer2.3.bn3', 
+                    'module.base.layer3.0.bn1', 'module.base.layer3.0.bn2', 'module.base.layer3.0.bn3', 'module.base.layer3.0.downsample.1', 
+                    'module.base.layer3.1.bn1', 'module.base.layer3.1.bn2', 'module.base.layer3.1.bn3', 'module.base.layer3.2.bn1', 
+                    'module.base.layer3.2.bn2', 'module.base.layer3.2.bn3', 'module.base.layer3.3.bn1', 'module.base.layer3.3.bn2', 
+                    'module.base.layer3.3.bn3', 'module.base.layer3.4.bn1', 'module.base.layer3.4.bn2', 'module.base.layer3.4.bn3', 
+                    'module.base.layer3.5.bn1', 'module.base.layer3.5.bn2', 'module.base.layer3.5.bn3', 'module.base.layer4.0.bn1', 
+                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
+                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
+                    'module.base.layer4.2.bn3', 'module.feat_bn']
+    abn_modules = ['module.base.layer4.0.bn1', 
+                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
+                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
+                    'module.base.layer4.2.bn3', 'module.feat_bn']
+
     abn_param = ABN_Parameters()
     for n, m in model.named_modules():
-        if m.__class__.__name__.find('BatchNorm') != -1:
+        if m.__class__.__name__.find('BatchNorm') != -1 and n in abn_modules:
 
             abn_param.reset(m.num_features)
             end = time.time()
