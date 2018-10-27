@@ -205,7 +205,11 @@ def adapt_source_bn(model, data_loader, print_freq=10):
                     'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
                     'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
                     'module.base.layer4.2.bn3', 'module.feat_bn']
-    abn_modules = ['module.base.layer4.0.bn1', 
+    abn_modules = ['module.base.layer3.0.bn1', 'module.base.layer3.0.bn2', 'module.base.layer3.0.bn3', 'module.base.layer3.0.downsample.1', 
+                    'module.base.layer3.1.bn1', 'module.base.layer3.1.bn2', 'module.base.layer3.1.bn3', 'module.base.layer3.2.bn1', 
+                    'module.base.layer3.2.bn2', 'module.base.layer3.2.bn3', 'module.base.layer3.3.bn1', 'module.base.layer3.3.bn2', 
+                    'module.base.layer3.3.bn3', 'module.base.layer3.4.bn1', 'module.base.layer3.4.bn2', 'module.base.layer3.4.bn3', 
+                    'module.base.layer3.5.bn1', 'module.base.layer3.5.bn2', 'module.base.layer3.5.bn3','module.base.layer4.0.bn1', 
                     'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
                     'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
                     'module.base.layer4.2.bn3', 'module.feat_bn']
