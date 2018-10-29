@@ -6,22 +6,24 @@ from torch.nn import init
 import torchvision
 import torch
 
+from .adapt_resnet import adapt_resnet50
 
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-           'resnet152']
+
+# __all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
+#            'resnet152']
 
 
 class ResNet(nn.Module):
     __factory = {
-        18: torchvision.models.resnet18,
-        34: torchvision.models.resnet34,
-        50: torchvision.models.resnet50,
-        101: torchvision.models.resnet101,
-        152: torchvision.models.resnet152,
+        # 18: torchvision.models.resnet18,
+        # 34: torchvision.models.resnet34,
+        50: adapt_resnet50,
+        # 101: torchvision.models.resnet101,
+        # 152: torchvision.models.resnet152,
     }
 
     def __init__(self, depth, pretrained=True, cut_at_pooling=False,
-                 num_features=0, norm=False, dropout=0, num_classes=0):
+                 num_features=0, norm=False, dropout=0, num_classes=0, adaptation=True):
         super(ResNet, self).__init__()
 
         self.depth = depth
@@ -31,7 +33,7 @@ class ResNet(nn.Module):
         # Construct base (pretrained) resnet
         if depth not in ResNet.__factory:
             raise KeyError("Unsupported depth:", depth)
-        self.base = ResNet.__factory[depth](pretrained=pretrained)
+        self.base = ResNet.__factory[depth](pretrained=pretrained, adaptation=adaptation)
 
         if not self.cut_at_pooling:
             self.num_features = num_features
@@ -107,21 +109,5 @@ class ResNet(nn.Module):
                     init.constant(m.bias, 0)
 
 
-def resnet18(**kwargs):
-    return ResNet(18, **kwargs)
-
-
-def resnet34(**kwargs):
-    return ResNet(34, **kwargs)
-
-
 def resnet50(**kwargs):
     return ResNet(50, **kwargs)
-
-
-def resnet101(**kwargs):
-    return ResNet(101, **kwargs)
-
-
-def resnet152(**kwargs):
-    return ResNet(152, **kwargs)

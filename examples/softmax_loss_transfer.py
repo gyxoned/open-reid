@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
-from reid.trainers import Trainer
+from reid.trainers import Trainer, AdaptTrainer
 from reid.evaluators import Evaluator, Evaluator_ABN
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
@@ -95,14 +95,14 @@ def main(args):
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset, num_classes, train_loader, val_loader, _ = \
-        get_data(args.dataset, args.split, args.data_dir, args.height,
+    dataset_source, num_classes, train_loader_source, val_loader_source, _ = \
+        get_data(args.dataset_source, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
-    dataset_ul, _, _, _, test_loader = \
-        get_data(args.dataset_ul, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers, args.num_instances, False)
+    dataset_target, _, train_loader_target, _, test_loader_target = \
+        get_data(args.dataset_target, args.split, args.data_dir, args.height,
+                 args.width, args.batch_size, args.workers, 0, True)
 
     # Create model
     model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
@@ -121,13 +121,19 @@ def main(args):
     #metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator_ABN(model, dataset=args.dataset)
+    evaluator = Evaluator(model)
+    # evaluator = Evaluator_ABN(model, dataset=args.dataset)
     if args.evaluate:
         #metric.train(model, train_loader)
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
+        del model
+        model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
+        model_target.load_state_dict(checkpoint['state_dict'])
+        model_target = nn.DataParallel(model_target).cuda()
+        evaluator = Evaluator(model_target)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset_ul.query, dataset_ul.gallery)
+        evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return
 
     # Criterion
@@ -151,16 +157,12 @@ def main(args):
     #optimizer = torch.optim.Adam(param_groups, lr=args.lr,
     #                             weight_decay=args.weight_decay)
     # Trainer
-    trainer = Trainer(model, criterion)
+    trainer = AdaptTrainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
         step_size = 60 if args.arch == 'inception' else args.ss
         # For warm up learning rate
-        #if epoch < step_size:
-        #    lr = (epoch + 1) * args.lr / (step_size)
-        #else:
-        #    lr = args.lr * (0.1 ** (epoch // step_size))
         lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
@@ -168,10 +170,10 @@ def main(args):
     # Start training
     for epoch in range(start_epoch, args.epochs):
         adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer)
+        trainer.train(epoch, train_loader_source, train_loader_target, optimizer)
         if epoch < args.start_save:
             continue
-        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        _, mAP = evaluator.evaluate(val_loader_source, dataset_source.val, dataset_source.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
@@ -185,19 +187,22 @@ def main(args):
               format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
+    del model
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    model.module.load_state_dict(checkpoint['state_dict'])
-    #metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset_ul.query, dataset_ul.gallery)
+    model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
+    model_target.load_state_dict(checkpoint['state_dict'])
+    model_target = nn.DataParallel(model_target).cuda()
+    evaluator = Evaluator(model_target)
+    evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Softmax loss classification")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='market1501',
+    parser.add_argument('-ds', '--dataset-source', type=str, default='market1501',
                         choices=datasets.names())
-    parser.add_argument('-du', '--dataset-ul', type=str, default='dukemtmc',
+    parser.add_argument('-dt', '--dataset-target', type=str, default='dukemtmc',
                         choices=datasets.names())
     parser.add_argument('-b', '--batch-size', type=int, default=16)
     parser.add_argument('-j', '--workers', type=int, default=4)
@@ -234,7 +239,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluation only")
-    parser.add_argument('--epochs', type=int, default=70)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--start_save', type=int, default=0,
                         help="start saving checkpoints after specific epoch")
     parser.add_argument('--seed', type=int, default=1)
