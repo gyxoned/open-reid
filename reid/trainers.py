@@ -139,8 +139,6 @@ class AdaptTrainer(object):
         return inputs, targets
 
     def _forward(self, s_inputs, t_inputs, targets):
-        import pdb
-        pdb.set_trace()
         outputs = self.model(s_inputs, t_inputs)
         outputs = outputs[:outputs.size(0)//2]
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):

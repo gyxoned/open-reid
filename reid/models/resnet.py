@@ -95,6 +95,34 @@ class ResNet(nn.Module):
             x = self.classifier(x)
         return x
 
+    # def forward(self, x):
+    #     for name, module in self.base._modules.items():
+    #         if name == 'avgpool':
+    #             break
+    #         x = module(x)
+
+    #     if self.cut_at_pooling:
+    #         return x
+
+    #     x = F.avg_pool2d(x, x.size()[2:])
+    #     x = x.view(x.size(0), -1)
+
+    #     if self.has_embedding:
+    #         x = self.feat(x)
+    #     x = self.feat_bn(x)
+    #     if self.training is False:
+    #         x = F.normalize(x)
+    #         return x
+    #     if self.norm:
+    #         x = F.normalize(x)
+    #     elif self.has_embedding:
+    #         x = F.relu(x)
+    #     if self.dropout > 0:
+    #         x = self.drop(x)
+    #     if self.num_classes > 0:
+    #         x = self.classifier(x)
+    #     return x
+
     def reset_params(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):

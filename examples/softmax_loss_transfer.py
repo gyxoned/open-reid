@@ -184,17 +184,20 @@ def main(args):
         }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
         print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
+              format(epoch, mAP, best_mAP, ' *' if is_best else ''))\
 
-    # Final test
-    # del model, evaluator
-    print('Test with best model:')
-    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    # model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
-    # model_target.load_state_dict(checkpoint['state_dict'])
-    # model_target = nn.DataParallel(model_target).cuda()
-    # evaluator = Evaluator(model_target)
+    print('Test with best model (adapt):')
     evaluator.evaluate(test_loader_target, train_loader_target, dataset_target.query, dataset_target.gallery)
+    # Final test
+    del model, evaluator
+    print('Test with best model:')
+    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
+    model_target.load_state_dict(checkpoint['state_dict'])
+    model_target = nn.DataParallel(model_target).cuda()
+    evaluator = Evaluator(model_target)
+    evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
+    # evaluator.evaluate(test_loader_target, train_loader_target, dataset_target.query, dataset_target.gallery)
 
 
 if __name__ == '__main__':

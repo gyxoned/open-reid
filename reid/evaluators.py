@@ -7,7 +7,7 @@ import torch
 from torch.autograd import Variable
 
 from .evaluation_metrics import cmc, mean_ap
-from .feature_extraction import extract_cnn_feature, extract_bn_responses
+from .feature_extraction import extract_cnn_feature, extract_bn_responses, extract_cnn_feature_adapt
 from .utils.meters import AverageMeter
 
 
@@ -23,7 +23,10 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
     for i, (imgs, fnames, pids, _) in enumerate(data_loader):
         data_time.update(time.time() - end)
 
-        outputs = extract_cnn_feature(model, imgs)
+        # outputs = extract_cnn_feature(model, imgs)
+        outputs = extract_cnn_feature_adapt(model, imgs, imgs)
+        outputs = outputs[:outputs.size(0)//2]
+        
         for fname, output, pid in zip(fnames, outputs, pids):
             features[fname] = output
             labels[fname] = pid
@@ -57,9 +60,9 @@ def extract_features_adapt(model, data_loader_source, data_loader_target, print_
         t_inputs = next(target_iter)
         t_imgs, _, _, _ = t_inputs
         t_imgs = t_imgs[:imgs.size(0)]
-        inputs = torch.cat((imgs, t_imgs))
+        # inputs = torch.cat((imgs, t_imgs))
 
-        outputs = extract_cnn_feature(model, inputs)
+        outputs = extract_cnn_feature_adapt(model, imgs, t_imgs)
         outputs = outputs[:outputs.size(0)//2]
 
         for fname, output, pid in zip(fnames, outputs, pids):

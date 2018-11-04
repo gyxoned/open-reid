@@ -25,6 +25,17 @@ def extract_cnn_feature(model, inputs, modules=None):
         h.remove()
     return list(outputs.values())
 
+def extract_cnn_feature_adapt(model, s_inputs, t_inputs, modules=None):
+    model.eval()
+    s_inputs = to_torch(s_inputs)
+    t_inputs = to_torch(t_inputs)
+    s_inputs = Variable(s_inputs, volatile=True)
+    t_inputs = Variable(t_inputs, volatile=True)
+    if modules is None:
+        outputs = model(s_inputs, t_inputs)
+        outputs = outputs.data.cpu()
+        return outputs
+
 def extract_bn_responses(model, input, modules):
     model.eval()
     input = to_torch(input)
