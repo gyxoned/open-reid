@@ -56,6 +56,7 @@ def extract_features_adapt(model, data_loader_source, data_loader_target, print_
 
         t_inputs = next(target_iter)
         t_imgs, _, _, _ = t_inputs
+        t_imgs = t_imgs[:imgs.size(0)]
         inputs = torch.cat((imgs, t_imgs))
 
         outputs = extract_cnn_feature(model, inputs)
