@@ -187,14 +187,14 @@ def main(args):
               format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    del model, evaluator
+    # del model, evaluator
     print('Test with best model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
-    model_target.load_state_dict(checkpoint['state_dict'])
-    model_target = nn.DataParallel(model_target).cuda()
-    evaluator = Evaluator(model_target)
-    evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
+    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    # model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
+    # model_target.load_state_dict(checkpoint['state_dict'])
+    # model_target = nn.DataParallel(model_target).cuda()
+    # evaluator = Evaluator(model_target)
+    evaluator.evaluate(test_loader_target, train_loader_target, dataset_target.query, dataset_target.gallery)
 
 
 if __name__ == '__main__':

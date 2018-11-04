@@ -66,7 +66,8 @@ class ResNet(nn.Module):
         if not self.pretrained:
             self.reset_params()
 
-    def forward(self, x):
+    def forward(self, s_x, t_x):
+        x = torch.cat((s_x,t_x))
         for name, module in self.base._modules.items():
             if name == 'avgpool':
                 break
