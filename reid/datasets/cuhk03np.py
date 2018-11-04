@@ -95,6 +95,9 @@ class CUHK03NP(object):
         num_gallery_imgs = split['num_gallery_imgs']
         num_total_imgs = num_train_imgs + num_query_imgs
 
+        import pdb
+        pdb.set_trace()
+
         if verbose:
             print("=> CUHK03 ({}) loaded".format(image_type))
             print("Dataset statistics:")

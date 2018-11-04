@@ -126,9 +126,9 @@ def main(args):
     if args.evaluate:
         #metric.train(model, train_loader)
         #print("Validation:")
-        #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
-        del model
-        model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
+        # evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
+        del model, evaluator
+        model_target = models.create(args.arch, pretrained=False, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
         model_target.load_state_dict(checkpoint['state_dict'])
         model_target = nn.DataParallel(model_target).cuda()
         evaluator = Evaluator(model_target)
@@ -187,7 +187,7 @@ def main(args):
               format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    del model
+    del model, evaluator
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model_target = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
