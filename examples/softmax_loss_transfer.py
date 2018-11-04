@@ -127,11 +127,10 @@ def main(args):
         #metric.train(model, train_loader)
         #print("Validation:")
         # evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
-        del model
-        # evaluator
-        model_target = models.create(args.arch, pretrained=False, num_features=args.features, dropout=args.dropout, num_classes=num_classes, adaptation=False)
-        model_target.load_state_dict(checkpoint['state_dict'])
-        model_target = nn.DataParallel(model_target).cuda()
+        # del model, evaluator
+        # model_target = models.create(args.arch, pretrained=False, num_features=args.features, dropout=args.dropout, num_classes=num_classes), adaptation=True)
+        # model_target.load_state_dict(checkpoint['state_dict'])
+        # model_target = nn.DataParallel(model_target).cuda()
         # evaluator = Evaluator(model_target)
         print("Test:")
         evaluator.evaluate(test_loader_target, train_loader_target, dataset_target.query, dataset_target.gallery)
