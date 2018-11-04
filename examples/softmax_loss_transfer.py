@@ -13,7 +13,7 @@ from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
 from reid.trainers import Trainer, AdaptTrainer
-from reid.evaluators import Evaluator, Evaluator_ABN
+from reid.evaluators import Evaluator, AdaptEvaluator
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
 from reid.utils.data.preprocessor import Preprocessor
@@ -121,7 +121,7 @@ def main(args):
     #metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator(model)
+    evaluator = AdaptEvaluator(model)
     # evaluator = Evaluator_ABN(model, dataset=args.dataset)
     if args.evaluate:
         #metric.train(model, train_loader)
@@ -173,7 +173,7 @@ def main(args):
         trainer.train(epoch, train_loader_source, train_loader_target, optimizer)
         if epoch < args.start_save:
             continue
-        _, mAP = evaluator.evaluate(val_loader_source, dataset_source.val, dataset_source.val)
+        _, mAP = evaluator.evaluate(val_loader_source, train_loader_target, dataset_source.val, dataset_source.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)

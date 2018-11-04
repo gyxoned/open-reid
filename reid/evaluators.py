@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 import time
+from itertools import cycle
 from collections import OrderedDict
 
 import torch
@@ -35,6 +36,43 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
                   'Time {:.3f} ({:.3f})\t'
                   'Data {:.3f} ({:.3f})\t'
                   .format(i + 1, len(data_loader),
+                          batch_time.val, batch_time.avg,
+                          data_time.val, data_time.avg))
+
+    return features, labels
+
+def extract_features_adapt(model, data_loader_source, data_loader_target, print_freq=1, metric=None):
+    model.eval()
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+
+    features = OrderedDict()
+    labels = OrderedDict()
+
+    target_iter = iter(cycle(data_loader_target))
+    end = time.time()
+    for i, (imgs, fnames, pids, _) in enumerate(data_loader_source):
+        data_time.update(time.time() - end)
+
+        t_inputs = next(target_iter)
+        t_imgs, _, _, _ = t_inputs
+        inputs = torch.cat((imgs, t_imgs))
+
+        outputs = extract_cnn_feature(model, inputs)
+        outputs = outputs[:outputs.size(0)//2]
+
+        for fname, output, pid in zip(fnames, outputs, pids):
+            features[fname] = output
+            labels[fname] = pid
+
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if (i + 1) % print_freq == 0:
+            print('Extract Features: [{}/{}]\t'
+                  'Time {:.3f} ({:.3f})\t'
+                  'Data {:.3f} ({:.3f})\t'
+                  .format(i + 1, len(data_loader_source),
                           batch_time.val, batch_time.avg,
                           data_time.val, data_time.avg))
 
@@ -153,6 +191,17 @@ class Evaluator(object):
 
     def evaluate(self, data_loader, query, gallery, metric=None):
         features, _ = extract_features(self.model, data_loader)
+        distmat = pairwise_distance(features, query, gallery, metric=metric)
+        return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset)
+
+class AdaptEvaluator(object):
+    def __init__(self, model, dataset='market1501'):
+        super(AdaptEvaluator, self).__init__()
+        self.model = model
+        self.dataset = dataset
+
+    def evaluate(self, data_loader_source, data_loader_target, query, gallery, metric=None):
+        features, _ = extract_features_adapt(self.model, data_loader_source, data_loader_target)
         distmat = pairwise_distance(features, query, gallery, metric=metric)
         return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset)
 
