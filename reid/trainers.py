@@ -92,7 +92,7 @@ class AdaptTrainer(object):
 
     def train(self, epoch, data_loader_source, data_loader_target, optimizer, print_freq=1):
         self.model.train()
-        device_num = torch.cuda.device_count()
+        #device_num = torch.cuda.device_count()
 
         batch_time = AverageMeter()
         data_time = AverageMeter()
@@ -139,8 +139,8 @@ class AdaptTrainer(object):
         return inputs, targets
 
     def _forward(self, s_inputs, t_inputs, targets):
-        outputs = self.model(s_inputs, t_inputs)
-        outputs = outputs[:outputs.size(0)//2]
+        outputs, _ = self.model(s_inputs, t_inputs)
+        #outputs = outputs[:outputs.size(0)//2]
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, targets)
             prec, = accuracy(outputs.data, targets.data)

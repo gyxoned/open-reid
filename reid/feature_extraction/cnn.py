@@ -32,7 +32,7 @@ def extract_cnn_feature_adapt(model, s_inputs, t_inputs, modules=None):
     s_inputs = Variable(s_inputs, volatile=True)
     t_inputs = Variable(t_inputs, volatile=True)
     if modules is None:
-        outputs = model(s_inputs, t_inputs)
+        outputs, _ = model(s_inputs, t_inputs)
         outputs = outputs.data.cpu()
         return outputs
 

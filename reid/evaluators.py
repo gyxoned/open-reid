@@ -25,8 +25,8 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
 
         # outputs = extract_cnn_feature(model, imgs)
         outputs = extract_cnn_feature_adapt(model, imgs, imgs)
-        outputs = outputs[:outputs.size(0)//2]
-        
+        #outputs = outputs[:outputs.size(0)//2]
+
         for fname, output, pid in zip(fnames, outputs, pids):
             features[fname] = output
             labels[fname] = pid
@@ -63,7 +63,7 @@ def extract_features_adapt(model, data_loader_source, data_loader_target, print_
         # inputs = torch.cat((imgs, t_imgs))
 
         outputs = extract_cnn_feature_adapt(model, imgs, t_imgs)
-        outputs = outputs[:outputs.size(0)//2]
+        #outputs = outputs[:outputs.size(0)//2]
 
         for fname, output, pid in zip(fnames, outputs, pids):
             features[fname] = output
@@ -230,7 +230,7 @@ class ABN_Parameters(object):
         self.running_var = self.running_var*self.count/(self.count+k) + \
                            var*k/(self.count+k) + d**2*self.count*k/(self.count+k)**2
         self.count = self.count + k
-    
+
     # def update(self, mean, var, k=1):
     #     if self.count==0:
     #         self.running_mean = mean
@@ -244,23 +244,23 @@ def adapt_source_bn(model, data_loader, print_freq=10):
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
-    all_bn_modules = ['module.base.bn1', 'module.base.layer1.0.bn1', 'module.base.layer1.0.bn2', 'module.base.layer1.0.bn3', 
-                    'module.base.layer1.0.downsample.1', 'module.base.layer1.1.bn1', 'module.base.layer1.1.bn2', 'module.base.layer1.1.bn3', 
-                    'module.base.layer1.2.bn1', 'module.base.layer1.2.bn2', 'module.base.layer1.2.bn3', 'module.base.layer2.0.bn1', 
-                    'module.base.layer2.0.bn2', 'module.base.layer2.0.bn3', 'module.base.layer2.0.downsample.1', 'module.base.layer2.1.bn1', 
-                    'module.base.layer2.1.bn2', 'module.base.layer2.1.bn3', 'module.base.layer2.2.bn1', 'module.base.layer2.2.bn2', 
-                    'module.base.layer2.2.bn3', 'module.base.layer2.3.bn1', 'module.base.layer2.3.bn2', 'module.base.layer2.3.bn3', 
-                    'module.base.layer3.0.bn1', 'module.base.layer3.0.bn2', 'module.base.layer3.0.bn3', 'module.base.layer3.0.downsample.1', 
-                    'module.base.layer3.1.bn1', 'module.base.layer3.1.bn2', 'module.base.layer3.1.bn3', 'module.base.layer3.2.bn1', 
-                    'module.base.layer3.2.bn2', 'module.base.layer3.2.bn3', 'module.base.layer3.3.bn1', 'module.base.layer3.3.bn2', 
-                    'module.base.layer3.3.bn3', 'module.base.layer3.4.bn1', 'module.base.layer3.4.bn2', 'module.base.layer3.4.bn3', 
-                    'module.base.layer3.5.bn1', 'module.base.layer3.5.bn2', 'module.base.layer3.5.bn3', 'module.base.layer4.0.bn1', 
-                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
-                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
+    all_bn_modules = ['module.base.bn1', 'module.base.layer1.0.bn1', 'module.base.layer1.0.bn2', 'module.base.layer1.0.bn3',
+                    'module.base.layer1.0.downsample.1', 'module.base.layer1.1.bn1', 'module.base.layer1.1.bn2', 'module.base.layer1.1.bn3',
+                    'module.base.layer1.2.bn1', 'module.base.layer1.2.bn2', 'module.base.layer1.2.bn3', 'module.base.layer2.0.bn1',
+                    'module.base.layer2.0.bn2', 'module.base.layer2.0.bn3', 'module.base.layer2.0.downsample.1', 'module.base.layer2.1.bn1',
+                    'module.base.layer2.1.bn2', 'module.base.layer2.1.bn3', 'module.base.layer2.2.bn1', 'module.base.layer2.2.bn2',
+                    'module.base.layer2.2.bn3', 'module.base.layer2.3.bn1', 'module.base.layer2.3.bn2', 'module.base.layer2.3.bn3',
+                    'module.base.layer3.0.bn1', 'module.base.layer3.0.bn2', 'module.base.layer3.0.bn3', 'module.base.layer3.0.downsample.1',
+                    'module.base.layer3.1.bn1', 'module.base.layer3.1.bn2', 'module.base.layer3.1.bn3', 'module.base.layer3.2.bn1',
+                    'module.base.layer3.2.bn2', 'module.base.layer3.2.bn3', 'module.base.layer3.3.bn1', 'module.base.layer3.3.bn2',
+                    'module.base.layer3.3.bn3', 'module.base.layer3.4.bn1', 'module.base.layer3.4.bn2', 'module.base.layer3.4.bn3',
+                    'module.base.layer3.5.bn1', 'module.base.layer3.5.bn2', 'module.base.layer3.5.bn3', 'module.base.layer4.0.bn1',
+                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1',
+                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2',
                     'module.base.layer4.2.bn3', 'module.feat_bn']
-    abn_modules = ['module.base.layer4.0.bn1', 
-                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1', 
-                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2', 
+    abn_modules = ['module.base.layer4.0.bn1',
+                    'module.base.layer4.0.bn2', 'module.base.layer4.0.bn3', 'module.base.layer4.0.downsample.1', 'module.base.layer4.1.bn1',
+                    'module.base.layer4.1.bn2', 'module.base.layer4.1.bn3', 'module.base.layer4.2.bn1', 'module.base.layer4.2.bn2',
                     'module.base.layer4.2.bn3', 'module.feat_bn']
 
     abn_param = ABN_Parameters()

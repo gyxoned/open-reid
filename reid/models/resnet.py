@@ -74,7 +74,8 @@ class ResNet(nn.Module):
             x = module(x)
 
         if self.cut_at_pooling:
-            return x
+            #return x
+            return x[:x.size(0)//2], x[x.size(0)//2:]
 
         x = F.avg_pool2d(x, x.size()[2:])
         x = x.view(x.size(0), -1)
@@ -84,7 +85,8 @@ class ResNet(nn.Module):
         x = self.feat_bn(x)
         if self.training is False:
             x = F.normalize(x)
-            return x
+            #return x
+            return x[:x.size(0)//2], x[x.size(0)//2:]
         if self.norm:
             x = F.normalize(x)
         elif self.has_embedding:
@@ -93,7 +95,7 @@ class ResNet(nn.Module):
             x = self.drop(x)
         if self.num_classes > 0:
             x = self.classifier(x)
-        return x
+        return x[:x.size(0)//2], x[x.size(0)//2:]
 
     # def forward(self, x):
     #     for name, module in self.base._modules.items():

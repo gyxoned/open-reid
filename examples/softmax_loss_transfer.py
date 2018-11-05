@@ -153,7 +153,7 @@ def main(args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay,
                                 nesterov=True)
-   
+
     #optimizer = torch.optim.Adam(param_groups, lr=args.lr,
     #                             weight_decay=args.weight_decay)
     # Trainer
@@ -188,6 +188,7 @@ def main(args):
 
     print('Test with best model (adapt):')
     evaluator.evaluate(test_loader_target, train_loader_target, dataset_target.query, dataset_target.gallery)
+    evaluator.evaluate(test_loader_target, test_loader_target, dataset_target.query, dataset_target.gallery)
     # Final test
     del model, evaluator
     print('Test with best model:')
