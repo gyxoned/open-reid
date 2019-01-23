@@ -40,6 +40,33 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
 
     return features, labels
 
+def extract_embeddings(model, features, alpha, query=None, topk_gallery=None, rerank_topk=0, print_freq=500):
+    # for i in model:
+    #     i.eval()
+    model.eval()
+    batch_time = AverageMeter()
+    data_time = AverageMeter()
+
+    end = time.time()
+    pairwise_score = Variable(torch.zeros(len(query), rerank_topk, 2).cuda())
+    probe_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in query], 0)
+    for i in range(len(query)):
+        gallery_feature = torch.cat([features[f].unsqueeze(0) for f, _, _ in topk_gallery[i]], 0)
+        pairwise_score[i, :, :] = model(Variable(probe_feature[i].view(1, -1).cuda(), volatile=True),
+                                        Variable(gallery_feature.cuda(), volatile=True))
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if (i + 1) % print_freq == 0:
+         print('Extract Embedding: [{}/{}]\t'
+               'Time {:.3f} ({:.3f})\t'
+               'Data {:.3f} ({:.3f})\t'.format(
+               i + 1, len(query),
+               batch_time.val, batch_time.avg,
+               data_time.val, data_time.avg))
+
+    return torch.cat(pairwise_score)
+
 def pairwise_distance(features, query=None, gallery=None, metric=None):
     if query is None and gallery is None:
         n = len(features)
@@ -146,15 +173,64 @@ def evaluate_all(distmat, query=None, gallery=None,
 
 
 class Evaluator(object):
-    def __init__(self, model, dataset='market1501'):
+    def __init__(self, model):
         super(Evaluator, self).__init__()
         self.model = model
-        self.dataset = dataset
 
-    def evaluate(self, data_loader, query, gallery, metric=None):
+    def evaluate(self, data_loader, query, gallery, metric=None, dataset='market1501'):
         features, _ = extract_features(self.model, data_loader)
         distmat = pairwise_distance(features, query, gallery, metric=metric)
-        return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset)
+        return evaluate_all(distmat, query=query, gallery=gallery, dataset=dataset)
+
+
+class CascadeEvaluator(object):
+    def __init__(self, base_model, embed_model, embed_dist_fn=None):
+        super(CascadeEvaluator, self).__init__()
+        self.base_model = base_model
+        self.embed_model = embed_model
+        self.embed_dist_fn = embed_dist_fn
+
+    def evaluate(self, data_loader, query, gallery, alpha=0, cache_file=None,
+                 rerank_topk=75, second_stage=True, dataset='market1501'):
+        # Extract features image by image
+        features, _ = extract_features(self.base_model, data_loader)
+
+        # Compute pairwise distance and evaluate for the first stage
+        distmat = pairwise_distance(features, query, gallery)
+        print("First stage evaluation:")
+        if second_stage:
+            evaluate_all(distmat, query=query, gallery=gallery, dataset=dataset)
+
+            # Sort according to the first stage distance
+            distmat = to_numpy(distmat)
+            rank_indices = np.argsort(distmat, axis=1)
+
+            # Build a data loader for topk predictions for each query
+            topk_gallery = [[] for i in range(len(query))]
+            for i, indices in enumerate(rank_indices):
+                for j in indices[:rerank_topk]:
+                    gallery_fname_id_pid = gallery[j]
+                    topk_gallery[i].append(gallery_fname_id_pid)
+
+            embeddings = extract_embeddings(self.embed_model, features, alpha,
+                                    query=query, topk_gallery=topk_gallery, rerank_topk=rerank_topk)
+
+            if self.embed_dist_fn is not None:
+                # embeddings = embeddings[:, 0].data
+                embeddings = self.embed_dist_fn(embeddings.data)
+
+            # Merge two-stage distances
+            for k, embed in enumerate(embeddings):
+                i, j = k // rerank_topk, k % rerank_topk
+                distmat[i, rank_indices[i, j]] = embed
+            for i, indices in enumerate(rank_indices):
+                bar = max(distmat[i][indices[:rerank_topk]])
+                gap = max(bar + 1. - distmat[i, indices[rerank_topk]], 0)
+                if gap > 0:
+                    distmat[i][indices[rerank_topk:]] += gap
+            print("Second stage evaluation:")
+        return evaluate_all(distmat, query, gallery, dataset=dataset)
+
 
 class ABN_Parameters(object):
     def __init__(self):
