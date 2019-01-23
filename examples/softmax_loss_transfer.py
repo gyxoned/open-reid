@@ -89,19 +89,19 @@ def main(args):
     print("==========\nArgs:{}\n==========".format(args))
 
     # Create data loaders
-    assert args.num_instances > 1, "num_instances should be greater than 1"
-    assert args.batch_size % args.num_instances == 0, \
-        'num_instances should divide batch_size'
+    # assert args.num_instances > 1, "num_instances should be greater than 1"
+    # assert args.batch_size % args.num_instances == 0, \
+    #     'num_instances should divide batch_size'
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset, num_classes, train_loader, val_loader, _ = \
-        get_data(args.dataset, args.split, args.data_dir, args.height,
+    dataset_source, num_classes, train_loader, val_loader, test_loader_source = \
+        get_data(args.dataset_source, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
-    dataset_ul, _, _, _, test_loader = \
-        get_data(args.dataset_ul, args.split, args.data_dir, args.height,
+    dataset_target, _, _, _, test_loader_target = \
+        get_data(args.dataset_target, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances, False)
 
     # Create model
@@ -121,13 +121,16 @@ def main(args):
     #metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
-    evaluator = Evaluator_ABN(model, dataset=args.dataset)
+    evaluator = Evaluator(model)   
+    # evaluator = Evaluator_ABN(model, dataset=args.dataset)
     if args.evaluate:
         #metric.train(model, train_loader)
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
-        print("Test:")
-        evaluator.evaluate(test_loader, dataset_ul.query, dataset_ul.gallery)
+        print("Test source domain:")
+        evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+        print("Test target domain:")
+        evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return
 
     # Criterion
@@ -171,7 +174,7 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        _, mAP = evaluator.evaluate(val_loader, dataset_source.val, dataset_source.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
@@ -189,15 +192,18 @@ def main(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     #metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset_ul.query, dataset_ul.gallery)
+    print('Test source domain:')
+    evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+    print('Test target domain:')
+    evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Softmax loss classification")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='market1501',
+    parser.add_argument('-ds', '--dataset-source', type=str, default='market1501',
                         choices=datasets.names())
-    parser.add_argument('-du', '--dataset-ul', type=str, default='dukemtmc',
+    parser.add_argument('-dt', '--dataset-target', type=str, default='dukemtmc',
                         choices=datasets.names())
     parser.add_argument('-b', '--batch-size', type=int, default=16)
     parser.add_argument('-j', '--workers', type=int, default=4)
