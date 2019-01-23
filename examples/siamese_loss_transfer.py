@@ -93,11 +93,11 @@ def main(args):
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
     dataset_source, train_loader, val_loader, test_loader_source = \
-        get_data(args.dataset, args.split, args.data_dir, args.height,
+        get_data(args.dataset_source, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers,
                  args.combine_trainval, args.np_ratio)
     dataset_target, _, _, test_loader_target = \
-        get_data(args.dataset, args.split, args.data_dir, args.height,
+        get_data(args.dataset_target, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers,
                  args.combine_trainval, args.np_ratio)
 
