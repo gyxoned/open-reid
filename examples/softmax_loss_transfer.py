@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
-from reid.trainers import Trainer
+from reid.trainers import Trainer, InferenceBN
 from reid.evaluators import Evaluator, Evaluator_ABN
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
@@ -74,7 +74,6 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
 
     return dataset, num_classes, train_loader, val_loader, test_loader
 
-
 def main(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -127,8 +126,12 @@ def main(args):
         #metric.train(model, train_loader)
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
-        print("Test source domain:")
-        evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+        
+        # print("Test source domain:")
+        # evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+
+        infer = InferenceBN(model)
+        infer.train(test_loader_target)
         print("Test target domain:")
         evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return
@@ -194,6 +197,8 @@ def main(args):
     #metric.train(model, train_loader)
     print('Test source domain:')
     evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+    infer = InferenceBN(model)
+    infer.train(test_loader_target)
     print('Test target domain:')
     evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
 

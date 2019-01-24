@@ -14,10 +14,10 @@ __factory = {
     'resnet152': resnet152,
     'resnet_ibn50a': resnet_ibn50a,
     'resnet_ibn101a': resnet_ibn101a,
-    'resne_ibn152a': resne_ibn152a,
+    'resnet_ibn152a': resne_ibn152a,
     'resnet_ibn50b': resnet_ibn50b,
     'resnet_ibn101b': resnet_ibn101b,
-    'resne_ibn152b': resne_ibn152b,
+    'resnet_ibn152b': resne_ibn152b,
 }
 
 

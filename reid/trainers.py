@@ -95,3 +95,37 @@ class SiameseTrainer(BaseTrainer):
         loss = self.criterion(outputs, targets)
         prec1, = accuracy(outputs.data, targets.data)
         return loss, prec1[0]
+
+class InferenceBN(object):
+    def __init__(self, model):
+        super(InferenceBN, self).__init__()
+        self.model = model
+
+    def train(self, data_loader, print_freq=10):
+        self.model.train()
+
+        batch_time = AverageMeter()
+        data_time = AverageMeter()
+        end = time.time()
+        for i, inputs in enumerate(data_loader):
+            data_time.update(time.time() - end)
+
+            inputs, _ = self._parse_data(inputs)
+            outputs = self.model(*inputs)
+
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if (i + 1) % print_freq == 0:
+                print('Epoch: [{}/{}]\t'
+                      'Time {:.3f} ({:.3f})\t'
+                      'Data {:.3f} ({:.3f})\t'
+                      .format(i + 1, len(data_loader),
+                              batch_time.val, batch_time.avg,
+                              data_time.val, data_time.avg))
+
+    def _parse_data(self, inputs):
+        imgs, _, pids, _ = inputs
+        inputs = [Variable(imgs)]
+        targets = Variable(pids.cuda())
+        return inputs, targets

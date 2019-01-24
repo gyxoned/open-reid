@@ -61,7 +61,7 @@ class IBN(nn.Module):
         half2 = planes - half1
         self.IN = nn.InstanceNorm2d(half1, affine=True)
         self.BN = nn.BatchNorm2d(half2)
-    
+
     def forward(self, x):
         split = torch.split(x, self.half, 1)
         out1 = self.IN(split[0].contiguous())
@@ -91,7 +91,7 @@ class Bottleneck(nn.Module):
 
     def forward(self, x):
         residual = x
-        
+
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.relu(out)
@@ -166,7 +166,7 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        
+
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -186,7 +186,7 @@ def resnet50_ibn_a(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        state_dict = torch.load(model_urls['resnet50b'])['state_dict']
+        state_dict = torch.load(model_urls['resnet50a'])['state_dict']
         state_dict = remove_module_key(state_dict)
         model.load_state_dict(state_dict)
         # model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
