@@ -10,20 +10,22 @@ class Market1501(Dataset):
     url = 'https://drive.google.com/file/d/0B8-rUzbwVRk0c054eEozWG9COHM/view'
     md5 = '65005ab7d12ec1c44de4eeafe813e68a'
 
-    def __init__(self, root, split_id=0, num_val=100, download=True):
+    name = 'market1501'
+
+    def __init__(self, root, split_id=0, num_val=100, start_idx=0, download=True):
         super(Market1501, self).__init__(root, split_id=split_id)
 
         if download:
             self.download()
 
-        if not self._check_integrity():
+        if not self._check_integrity(self.name):
             raise RuntimeError("Dataset not found or corrupted. " +
                                "You can use download=True to download it.")
 
-        self.load(num_val)
+        self.load(self.name, num_val=num_val, start_idx=start_idx)
 
     def download(self):
-        if self._check_integrity():
+        if self._check_integrity(self.name):
             print("Files already downloaded and verified")
             return
 
@@ -33,7 +35,7 @@ class Market1501(Dataset):
         from glob import glob
         from zipfile import ZipFile
 
-        raw_dir = osp.join(self.root, 'raw')
+        raw_dir = osp.join(self.root, self.name, 'raw')
         mkdir_if_missing(raw_dir)
 
         # Download the raw zip file
@@ -53,7 +55,7 @@ class Market1501(Dataset):
                 z.extractall(path=raw_dir)
 
         # Format
-        images_dir = osp.join(self.root, 'images')
+        images_dir = osp.join(self.root, self.name, 'images')
         mkdir_if_missing(images_dir)
 
         # 1501 identities (+1 for background) with 6 camera views each
@@ -85,11 +87,11 @@ class Market1501(Dataset):
         # Save meta information into a json file
         meta = {'name': 'Market1501', 'shot': 'multiple', 'num_cameras': 6,
                 'identities': identities}
-        write_json(meta, osp.join(self.root, 'meta.json'))
+        write_json(meta, osp.join(self.root, self.name, 'meta.json'))
 
         # Save the only training / test split
         splits = [{
             'trainval': sorted(list(trainval_pids)),
             'query': sorted(list(query_pids)),
             'gallery': sorted(list(gallery_pids))}]
-        write_json(splits, osp.join(self.root, 'splits.json'))
+        write_json(splits, osp.join(self.root, self.name, 'splits.json'))

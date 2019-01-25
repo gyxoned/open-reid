@@ -21,19 +21,20 @@ from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
-def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_instances,
-             combine_trainval):
-    # root = osp.join(data_dir, name)
-    root = data_dir
+def get_data(name_source, name_target, split_id, data_dir, height, width, batch_size, workers, num_instances, combine_trainval):
+    dataset_source = datasets.create(name_source, data_dir, split_id=split_id, start_idx=0)
+    train_set_source = dataset_source.trainval if combine_trainval else dataset_source.train
+    num_classes_source = (dataset_source.num_trainval_ids if combine_trainval else dataset_source.num_train_ids)
 
-    dataset = datasets.create(name, root, split_id=split_id)
+    dataset_target = datasets.create(name_target, data_dir, split_id=split_id, start_idx=num_classes_source)
+    train_set_target = dataset_target.trainval if combine_trainval else dataset_target.train
+    num_classes_target = (dataset_target.num_trainval_ids if combine_trainval else dataset_target.num_train_ids)
+
+    train_set = list(set(train_set_source) | set(train_set_target))
+    val_set = list(set(dataset_source.val) | set(dataset_target.val))
 
     normalizer = T.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
-
-    train_set = dataset.trainval if combine_trainval else dataset.train
-    num_classes = (dataset.num_trainval_ids if combine_trainval
-                   else dataset.num_train_ids)
 
     train_transformer = T.Compose([
         T.RandomSizedRectCrop(height, width),
@@ -54,26 +55,33 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         sampler_type = RandomMultipleGallerySampler(train_set, num_instances)
     else:
         sampler_type = None
+
     train_loader = DataLoader(
-        Preprocessor(train_set, root=dataset.images_dir,
+        Preprocessor(train_set, root=data_dir,
                      transform=train_transformer),
         batch_size=batch_size, num_workers=workers,
         sampler=sampler_type,
         shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
 
     val_loader = DataLoader(
-        Preprocessor(dataset.val, root=dataset.images_dir,
+        Preprocessor(val_set, root=data_dir,
                      transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
-    test_loader = DataLoader(
-        Preprocessor(list(set(dataset.query) | set(dataset.gallery)),
-                     root=dataset.images_dir, transform=test_transformer),
+    test_loader_source = DataLoader(
+        Preprocessor(list(set(dataset_source.query) | set(dataset_source.gallery)),
+                     root=dataset_source.images_dir, transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
-    return dataset, num_classes, train_loader, val_loader, test_loader
+    test_loader_target = DataLoader(
+        Preprocessor(list(set(dataset_target.query) | set(dataset_target.gallery)),
+                     root=dataset_target.images_dir, transform=test_transformer),
+        batch_size=batch_size, num_workers=workers,
+        shuffle=False, pin_memory=True)
+
+    return dataset_source, dataset_target, num_classes_source+num_classes_target, train_loader, val_loader, test_loader_source, test_loader_source
 
 def main(args):
     np.random.seed(args.seed)
@@ -95,14 +103,11 @@ def main(args):
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset_source, num_classes, train_loader, val_loader, test_loader_source = \
-        get_data(args.dataset_source, args.split, args.data_dir, args.height,
+
+    dataset_source, dataset_target, num_classes, train_loader, val_loader, test_loader_source, test_loader_source = \
+        get_data(args.dataset_source, args.dataset_target, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
-
-    dataset_target, _, _, _, test_loader_target = \
-        get_data(args.dataset_target, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers, args.num_instances, False)
 
     # Create model
     model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
@@ -127,9 +132,9 @@ def main(args):
         #metric.train(model, train_loader)
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
-
-        # print("Test source domain:")
-        # evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
+        
+        print("Test source domain:")
+        evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
 
         infer = InferenceBN(model)
         infer.train(test_loader_target)
@@ -198,8 +203,8 @@ def main(args):
     #metric.train(model, train_loader)
     print('Test source domain:')
     evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
-    infer = InferenceBN(model)
-    infer.train(test_loader_target)
+    # infer = InferenceBN(model)
+    # infer.train(test_loader_target)
     print('Test target domain:')
     evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
 

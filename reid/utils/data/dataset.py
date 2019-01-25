@@ -7,7 +7,7 @@ import numpy as np
 from ..serialization import read_json
 
 
-def _pluck(identities, indices, relabel=False):
+def _pluck(img_path, identities, indices, relabel=False, start_idx=0):
     ret = []
     for index, pid in enumerate(indices):
         pid_images = identities[pid]
@@ -17,9 +17,9 @@ def _pluck(identities, indices, relabel=False):
                 x, y, _ = map(int, name.split('_'))
                 assert pid == x and camid == y
                 if relabel:
-                    ret.append((fname, index, camid))
+                    ret.append((osp.join(img_path,fname), start_idx+index, camid))
                 else:
-                    ret.append((fname, pid, camid))
+                    ret.append((osp.join(img_path,fname), pid, camid))
     return ret
 
 
@@ -35,10 +35,11 @@ class Dataset(object):
 
     @property
     def images_dir(self):
-        return osp.join(self.root, 'images')
+        # return osp.join(self.root, 'images')
+        return self.root
 
-    def load(self, num_val=0.3, verbose=True):
-        splits = read_json(osp.join(self.root, 'splits.json'))
+    def load(self, name, num_val=0.3, verbose=True, start_idx=0):
+        splits = read_json(osp.join(self.root, name, 'splits.json'))
         if self.split_id >= len(splits):
             raise ValueError("split_id exceeds total splits {}"
                              .format(len(splits)))
@@ -56,13 +57,15 @@ class Dataset(object):
         train_pids = sorted(trainval_pids[:-num_val])
         val_pids = sorted(trainval_pids[-num_val:])
 
-        self.meta = read_json(osp.join(self.root, 'meta.json'))
+        img_path = osp.join(name, 'images')
+
+        self.meta = read_json(osp.join(self.root, name, 'meta.json'))
         identities = self.meta['identities']
-        self.train = _pluck(identities, train_pids, relabel=True)
-        self.val = _pluck(identities, val_pids, relabel=True)
-        self.trainval = _pluck(identities, trainval_pids, relabel=True)
-        self.query = _pluck(identities, self.split['query'])
-        self.gallery = _pluck(identities, self.split['gallery'])
+        self.train = _pluck(img_path, identities, train_pids, relabel=True, start_idx=start_idx)
+        self.val = _pluck(img_path, identities, val_pids, relabel=True, start_idx=start_idx)
+        self.trainval = _pluck(img_path, identities, trainval_pids, relabel=True, start_idx=start_idx)
+        self.query = _pluck(img_path, identities, self.split['query'])
+        self.gallery = _pluck(img_path, identities, self.split['gallery'])
         self.num_train_ids = len(train_pids)
         self.num_val_ids = len(val_pids)
         self.num_trainval_ids = len(trainval_pids)
@@ -82,10 +85,12 @@ class Dataset(object):
             print("  gallery  | {:5d} | {:8d}"
                   .format(len(self.split['gallery']), len(self.gallery)))
 
-    def _check_integrity(self):
-        return osp.isdir(osp.join(self.root, 'images')) and \
-               osp.isfile(osp.join(self.root, 'meta.json')) and \
-               osp.isfile(osp.join(self.root, 'splits.json'))
+    def _check_integrity(self, name):
+        return osp.isdir(osp.join(self.root, name, 'images')) and \
+               osp.isfile(osp.join(self.root, name, 'meta.json')) and \
+               osp.isfile(osp.join(self.root, name, 'splits.json'))
+
+
 
 def _pluck_msmt(list_file, subdir, pattern=re.compile(r'([-\d]+)_([-\d]+)_([-\d]+)')):
     with open(list_file, 'r') as f:
