@@ -69,19 +69,19 @@ def get_data(name_source, name_target, split_id, data_dir, height, width, batch_
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
+    test_set_source = list(set(dataset_source.query) | set(dataset_source.gallery))
     test_loader_source = DataLoader(
-        Preprocessor(list(set(dataset_source.query) | set(dataset_source.gallery)),
-                     root=dataset_source.images_dir, transform=test_transformer),
+        Preprocessor(test_set_source, root=dataset_source.images_dir, transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
+    test_set_target = list(set(dataset_target.query) | set(dataset_target.gallery))
     test_loader_target = DataLoader(
-        Preprocessor(list(set(dataset_target.query) | set(dataset_target.gallery)),
-                     root=dataset_target.images_dir, transform=test_transformer),
+        Preprocessor(test_set_target, root=dataset_target.images_dir, transform=test_transformer),
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
-    return dataset_source, dataset_target, num_classes_source+num_classes_target, train_loader, val_loader, test_loader_source, test_loader_source
+    return dataset_source, dataset_target, num_classes_source+num_classes_target, train_loader, val_loader, test_loader_source, test_loader_target
 
 def main(args):
     np.random.seed(args.seed)
@@ -104,7 +104,7 @@ def main(args):
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
 
-    dataset_source, dataset_target, num_classes, train_loader, val_loader, test_loader_source, test_loader_source = \
+    dataset_source, dataset_target, num_classes, train_loader, val_loader, test_loader_source, test_loader_target = \
         get_data(args.dataset_source, args.dataset_target, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
@@ -133,11 +133,13 @@ def main(args):
         #print("Validation:")
         #evaluator.evaluate(val_loader, dataset_ul.val, dataset_ul.val)
         
+        # infer = InferenceBN(model)
+        # infer.train(test_loader_source)
         print("Test source domain:")
         evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
 
-        infer = InferenceBN(model)
-        infer.train(test_loader_target)
+        # infer = InferenceBN(model)
+        # infer.train(test_loader_target)
         print("Test target domain:")
         evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return

@@ -131,8 +131,8 @@ def main(args):
         # print("Test source domain:")
         # evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
 
-        infer = InferenceBN(model)
-        infer.train(test_loader_target)
+        # infer = InferenceBN(model)
+        # infer.train(test_loader_target)
         print("Test target domain:")
         evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return
@@ -198,8 +198,8 @@ def main(args):
     #metric.train(model, train_loader)
     print('Test source domain:')
     evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
-    infer = InferenceBN(model)
-    infer.train(test_loader_target)
+    # infer = InferenceBN(model)
+    # infer.train(test_loader_target)
     print('Test target domain:')
     evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
 
