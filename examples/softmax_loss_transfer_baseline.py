@@ -7,13 +7,12 @@ import sys
 import torch
 from torch import nn
 from torch.backends import cudnn
-from torch.nn import init
 from torch.utils.data import DataLoader
 
 from reid import datasets
 from reid import models
 from reid.dist_metric import DistanceMetric
-from reid.trainers import Trainer, InferenceBN, CrossDomainTrainer
+from reid.trainers import Trainer, InferenceBN
 from reid.evaluators import Evaluator, Evaluator_ABN
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
@@ -96,39 +95,27 @@ def main(args):
     if args.height is None or args.width is None:
         args.height, args.width = (144, 56) if args.arch == 'inception' else \
                                   (256, 128)
-    dataset_source, num_classes, train_loader_source, val_loader, test_loader_source = \
+    dataset_source, num_classes, train_loader, val_loader, test_loader_source = \
         get_data(args.dataset_source, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
 
-    dataset_target, _, train_loader_target, _, test_loader_target = \
+    dataset_target, _, _, _, test_loader_target = \
         get_data(args.dataset_target, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances, False)
 
     # Create model
-    model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=0)
-    netC = nn.Linear(args.features, num_classes, bias=True)
-    netD = nn.Linear(args.features, 2, bias=True)
-    init.normal(netC.weight, std=0.001)
-    init.constant(netC.bias, 0)
-    init.normal(netD.weight, std=0.001)
-    init.constant(netD.bias, 0)
-
+    model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
     # Load from checkpoint
     start_epoch = best_mAP = 0
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
-        model.load_state_dict(checkpoint['model_state_dict'])
-        netC.load_state_dict(checkpoint['netC_state_dict'])
-        netD.load_state_dict(checkpoint['netD_state_dict'])
+        model.load_state_dict(checkpoint['state_dict'])
         start_epoch = checkpoint['epoch']
         best_mAP = checkpoint['best_mAP']
         print("=> Start epoch {}  best mAP {:.1%}"
               .format(start_epoch, best_mAP))
-
     model = nn.DataParallel(model).cuda()
-    netC = nn.DataParallel(netC).cuda()
-    netD = nn.DataParallel(netD).cuda()
 
     # Distance metric
     #metric = DistanceMetric(algorithm=args.dist_metric)
@@ -160,17 +147,10 @@ def main(args):
                       id(p) not in base_param_ids]
         param_groups = [
             {'params': model.module.base.parameters(), 'lr_mult': 1.0},
-            {'params': new_params, 'lr_mult': 10.0},
-            {'params': netC.parameters(), 'lr_mult': 10.0}]
+            {'params': new_params, 'lr_mult': 10.0}]
     else:
-        param_groups = [
-            {'params': model.parameters(), 'lr_mult': 1.0},
-            {'params': netC.parameters(), 'lr_mult': 10.0}]
+        param_groups = model.parameters()
     optimizer = torch.optim.SGD(param_groups, lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay,
-                                nesterov=True)
-    optimizer_D = torch.optim.SGD(netD.parameters(), lr=args.lr,
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay,
                                 nesterov=True)
@@ -178,11 +158,16 @@ def main(args):
     #optimizer = torch.optim.Adam(param_groups, lr=args.lr,
     #                             weight_decay=args.weight_decay)
     # Trainer
-    trainer = CrossDomainTrainer(model, netC, netD, criterion)
+    trainer = Trainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
         step_size = 60 if args.arch == 'inception' else args.ss
+        # For warm up learning rate
+        #if epoch < step_size:
+        #    lr = (epoch + 1) * args.lr / (step_size)
+        #else:
+        #    lr = args.lr * (0.1 ** (epoch // step_size))
         lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
@@ -190,7 +175,7 @@ def main(args):
     # Start training
     for epoch in range(start_epoch, args.epochs):
         adjust_lr(epoch)
-        trainer.train(epoch, train_loader_source, train_loader_target, optimizer, optimizer_D)
+        trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
         _, mAP = evaluator.evaluate(val_loader, dataset_source.val, dataset_source.val)
@@ -198,9 +183,7 @@ def main(args):
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
         save_checkpoint({
-            'model_state_dict': model.module.state_dict(),
-            'netC_state_dict': netC.module.state_dict(),
-            'netD_state_dict': netD.module.state_dict(),
+            'state_dict': model.module.state_dict(),
             'epoch': epoch + 1,
             'best_mAP': best_mAP,
         }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
@@ -211,7 +194,8 @@ def main(args):
     # Final test
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    model.module.load_state_dict(checkpoint['model_state_dict'])
+    model.module.load_state_dict(checkpoint['state_dict'])
+    #metric.train(model, train_loader)
     print('Test source domain:')
     evaluator.evaluate(test_loader_source, dataset_source.query, dataset_source.gallery)
     # infer = InferenceBN(model)
