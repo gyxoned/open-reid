@@ -281,7 +281,7 @@ def main(args):
             trainer.train(clusters[nc], epoch, train_loader_source, train_loader_target, optimizer, optimizer_D)
             # if epoch < args.start_save:
             #     continue
-            _, mAP = evaluator.evaluate(val_loader, val_set, val_set)
+            _, mAP = evaluator.evaluate(val_loader, valset, valset)
 
             is_best = mAP > best_mAP
             best_mAP = max(mAP, best_mAP)
