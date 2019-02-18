@@ -198,7 +198,7 @@ class TeacherStudentTrainer(object):
         self.criterion_cls = nn.CrossEntropyLoss().cuda()
         self.criterion_consis = nn.MSELoss().cuda()
 
-    def train(self, num_cluster, epoch, data_loader, optimizer, optimizer_D, print_freq=1):
+    def train(self, num_cluster, epoch, data_loader_source, data_loader_target, optimizer, optimizer_D, print_freq=1):
         self.student_model.train()
         self.teacher_model.train() # eval()?
         self.netC.train()
@@ -212,13 +212,22 @@ class TeacherStudentTrainer(object):
         losses_D = AverageMeter()
         precisions = AverageMeter()
 
+        target_iter = iter(cycle(data_loader_target))
 
         end = time.time()
-        for i, inputs in enumerate(data_loader):
+        for i, inputs in enumerate(data_loader_source):
             data_time.update(time.time() - end)
 
-            inputs, inputs_z, targets, dom_targets = self._parse_data(inputs)
+            # merge inputs
+            inputs0, inputs_z0, targets0, dom_targets0 = self._parse_data(inputs)
+            inputs1, inputs_z1, targets1, dom_targets1 = self._parse_data(next(target_iter))
 
+            inputs = torch.cat((inputs0, inputs1))
+            inputs_z = torch.cat((inputs_z0, inputs_z1))
+            targets = torch.cat((targets0, targets1))
+            dom_targets = torch.cat((dom_targets0, dom_targets1))
+
+            # forward
             f_out_s = self.student_model(inputs)
             f_out_t = self.teacher_model(inputs_z).detach()
 
@@ -266,7 +275,7 @@ class TeacherStudentTrainer(object):
                       'Loss_dom {:.3f} ({:.3f})\t'
                       'Loss_D {:.3f} ({:.3f})\t'
                       'Prec {:.2%} ({:.2%})\t'
-                      .format(num_cluster, epoch, i + 1, len(data_loader),
+                      .format(num_cluster, epoch, i + 1, len(data_loader_source),
                               batch_time.val, batch_time.avg,
                               data_time.val, data_time.avg,
                               losses_cls.val, losses_cls.avg,

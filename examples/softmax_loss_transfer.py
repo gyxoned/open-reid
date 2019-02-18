@@ -19,7 +19,7 @@ from reid.trainers import Trainer, InferenceBN, TeacherStudentTrainer
 from reid.evaluators import Evaluator, Evaluator_ABN, extract_features
 from reid.utils.data import transforms as T
 from reid.utils.data.sampler import RandomMultipleGallerySampler
-from reid.utils.data.preprocessor import Preprocessor
+from reid.utils.data.preprocessor import Preprocessor, Preprocessor_double
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
 
@@ -79,7 +79,7 @@ def get_data(name, split_id, data_dir, combine_trainval):
     return dataset, num_classes
     # , train_loader, val_loader, test_loader
 
-def get_train_loader(dataset, height, width, batch_size, workers, num_instances, combine_trainval=True):
+def get_train_loader(dataset, split_classes, height, width, batch_size, workers, num_instances, combine_trainval=True):
 
     normalizer = T.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
@@ -90,11 +90,7 @@ def get_train_loader(dataset, height, width, batch_size, workers, num_instances,
         T.ToTensor(),
         normalizer,
     ])
-    test_transformer = T.Compose([
-        T.RectScale(height, width),
-        T.ToTensor(),
-        normalizer,
-    ])
+
     train_set = dataset.trainval if combine_trainval else dataset.train
 
     rmgs_flag = num_instances > 0
@@ -104,18 +100,13 @@ def get_train_loader(dataset, height, width, batch_size, workers, num_instances,
         sampler_type = None
 
     train_loader = DataLoader(
-        Preprocessor(train_set, root=dataset.images_dir,
+        Preprocessor_double(train_set, split_classes, root=dataset.images_dir,
                      transform=train_transformer),
         batch_size=batch_size, num_workers=workers,
         sampler=sampler_type,
         shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
-    val_loader = DataLoader(
-        Preprocessor(dataset.val, root=dataset.images_dir,
-                     transform=test_transformer),
-        batch_size=batch_size, num_workers=workers,
-        shuffle=False, pin_memory=True)
 
-    return train_loader, val_loader
+    return train_loader
 
 def get_test_loader(dataset, height, width, batch_size, workers, testset=None):
     normalizer = T.Normalize(mean=[0.485, 0.456, 0.406],
@@ -222,17 +213,39 @@ def main(args):
         teacher_model = copy.deepcopy(student_model)
 
         # TODO cluster
-        print('\n Clustering into {} classes \n'.format(clusters[nc]))
         testset = dataset_target.trainval if args.combine_trainval else dataset_target.train
         cluster_loader = get_test_loader(dataset_target, args.height, args.width, args.batch_size, args.workers, testset=testset)
         dict_f, _ = extract_features(teacher_model, cluster_loader)
         f = torch.stack(list(dict_f.values())).numpy()
+
+        print('\n Clustering into {} classes \n'.format(clusters[nc]))
         c_predict = AgglomerativeClustering(n_clusters=clusters[nc]).fit_predict(f)
-        import pdb
-        pdb.set_trace()
+        c_predict = c_predict + num_classes
+        for i in range(len(testset)): 
+            testset[i] = list(testset[i])
+            testset[i][1] = c_predict[i]
+            testset[i] = tuple(testset[i])
 
         # TODO update netC
+        new_weight = torch.FloatTensor(num_classes+clusters[nc], args.features).cuda()
+        new_bias = torch.FloatTensor(num_classes+clusters[nc]).cuda()
+        init.normal(new_weight, std=0.001)
+        init.constant(new_bias, 0)
+        new_weight[:num_classes] = netC.state_dict()['module.weight']
+        new_bias[:num_classes] = netC.state_dict()['module.bias']
+        netC = nn.Linear(args.features, num_classes+clusters[nc], bias=True)
+        netC.state_dict()['weight'] = new_weight
+        netC.state_dict()['bias'] = new_bias
+        netC = nn.DataParallel(netC).cuda()
+
         # TODO data loader
+        train_loader_source = get_train_loader(dataset_source, num_classes, args.height, args.width, 
+            args.batch_size//2, args.workers, args.num_instances, args.combine_trainval)
+        train_loader_target = get_train_loader(dataset_target, num_classes, args.height, args.width, 
+            args.batch_size//2, args.workers, args.num_instances, args.combine_trainval)
+        valset = list(set(dataset_source.val) | set(dataset_target.val))
+        val_loader = get_test_loader(dataset_source, args.height, args.width, 
+            args.batch_size, args.workers, testset=valset)
 
         # Optimizer
         lr = args.lr * (0.1 ** nc)
@@ -265,10 +278,10 @@ def main(args):
         # Start training
         for epoch in range(0, epochs[nc]):
             adjust_lr(epoch)
-            trainer.train(clusters[nc], epoch, train_loader, optimizer, optimizer_D)
+            trainer.train(clusters[nc], epoch, train_loader_source, train_loader_target, optimizer, optimizer_D)
             # if epoch < args.start_save:
             #     continue
-            _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+            _, mAP = evaluator.evaluate(val_loader, val_set, val_set)
 
             is_best = mAP > best_mAP
             best_mAP = max(mAP, best_mAP)
