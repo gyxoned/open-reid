@@ -25,59 +25,14 @@ from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
 def get_data(name, split_id, data_dir, combine_trainval):
-# , height, width, batch_size, workers, num_instances, combine_trainval):
-    # root = osp.join(data_dir, name)
     root = data_dir
 
     dataset = datasets.create(name, root, split_id=split_id)
 
-    # normalizer = T.Normalize(mean=[0.485, 0.456, 0.406],
-    #                          std=[0.229, 0.224, 0.225])
-
-    # train_set = dataset.trainval if combine_trainval else dataset.train
     num_classes = (dataset.num_trainval_ids if combine_trainval
                    else dataset.num_train_ids)
 
-    # train_transformer = T.Compose([
-    #     T.RandomSizedRectCrop(height, width),
-    #     T.RandomSizedEarser(),
-    #     T.RandomHorizontalFlip(),
-    #     T.ToTensor(),
-    #     normalizer,
-    # ])
-
-    # test_transformer = T.Compose([
-    #     T.RectScale(height, width),
-    #     T.ToTensor(),
-    #     normalizer,
-    # ])
-
-    # rmgs_flag = num_instances > 0
-    # if rmgs_flag:
-    #     sampler_type = RandomMultipleGallerySampler(train_set, num_instances)
-    # else:
-    #     sampler_type = None
-    # train_loader = DataLoader(
-    #     Preprocessor(train_set, root=dataset.images_dir,
-    #                  transform=train_transformer),
-    #     batch_size=batch_size, num_workers=workers,
-    #     sampler=sampler_type,
-    #     shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
-
-    # val_loader = DataLoader(
-    #     Preprocessor(dataset.val, root=dataset.images_dir,
-    #                  transform=test_transformer),
-    #     batch_size=batch_size, num_workers=workers,
-    #     shuffle=False, pin_memory=True)
-
-    # test_loader = DataLoader(
-    #     Preprocessor(list(set(dataset.query) | set(dataset.gallery)),
-    #                  root=dataset.images_dir, transform=test_transformer),
-    #     batch_size=batch_size, num_workers=workers,
-    #     shuffle=False, pin_memory=True)
-
     return dataset, num_classes
-    # , train_loader, val_loader, test_loader
 
 def get_train_loader(dataset, split_classes, height, width, batch_size, workers, num_instances, combine_trainval=True):
 
@@ -169,12 +124,8 @@ def main(args):
                                   (256, 128)
 
     dataset_source, num_classes = get_data(args.dataset_source, args.split, args.data_dir, args.combine_trainval)
-        # , args.height, args.width, args.batch_size, args.workers, args.num_instances,
-        #          args.combine_trainval)
     test_loader_source = get_test_loader(dataset_source, args.height, args.width, args.batch_size, args.workers)
     dataset_target, _ = get_data(args.dataset_target, args.split, args.data_dir, args.combine_trainval)
-        # , args.height,
-        #          args.width, args.batch_size, args.workers, args.num_instances, True)
     test_loader_target = get_test_loader(dataset_target, args.height, args.width, args.batch_size, args.workers)
 
     # Create model
