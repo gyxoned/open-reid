@@ -219,18 +219,18 @@ def main(args):
         teacher_model.load_state_dict(student_model.state_dict())
 
         # TODO cluster
-        testset = dataset_target.trainval if args.combine_trainval else dataset_target.train
-        cluster_loader = get_test_loader(dataset_target, args.height, args.width, args.batch_size, args.workers, testset=testset)
+        cluster_loader = get_test_loader(dataset_target, args.height, args.width, args.batch_size, args.workers, testset=dataset_target.trainval)
         dict_f, _ = extract_features(teacher_model, cluster_loader)
         f = torch.stack(list(dict_f.values())).numpy()
 
         print('\n Clustering into {} classes \n'.format(clusters[nc]))
         c_predict = AgglomerativeClustering(n_clusters=clusters[nc]).fit_predict(f)
         c_predict = c_predict + num_classes
-        for i in range(len(testset)): 
-            testset[i] = list(testset[i])
-            testset[i][1] = c_predict[i]
-            testset[i] = tuple(testset[i])
+        for i in range(len(dataset_target.trainval)): 
+            dataset_target.trainval[i] = list(dataset_target.trainval[i])
+            dataset_target.trainval[i][1] = c_predict[i]
+            dataset_target.trainval[i] = tuple(dataset_target.trainval[i])
+        dataset_target.val = dataset_target.trainval[:-len(dataset_target.val)]
 
         # TODO update netC
         new_weight = torch.FloatTensor(num_classes+clusters[nc], args.features).cuda()

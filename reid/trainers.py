@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 import time
 from itertools import cycle
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -8,7 +9,7 @@ from torch.autograd import Variable
 from torch.nn import functional as F
 
 from .evaluation_metrics import accuracy
-from .loss import OIMLoss, TripletLoss
+from .loss import OIMLoss, TripletLoss, softmax_mse_loss, softmax_kl_loss
 from .utils.meters import AverageMeter
 
 
@@ -198,7 +199,8 @@ class TeacherStudentTrainer(object):
         self.criterion_cls = nn.CrossEntropyLoss().cuda()
         self.criterion_consis = nn.MSELoss().cuda()
 
-    def train(self, num_cluster, epoch, data_loader_source, data_loader_target, optimizer, optimizer_D, print_freq=1):
+    def train(self, num_cluster, epoch, data_loader_source, data_loader_target, optimizer, optimizer_D, 
+                    print_freq=1, consistency=10, consistency_rampup=10):
         self.student_model.train()
         self.teacher_model.train() # eval()?
         self.netC.train()
@@ -218,12 +220,9 @@ class TeacherStudentTrainer(object):
         for i, inputs in enumerate(data_loader_target):
             data_time.update(time.time() - end)
 
-            # merge inputs
+            # process inputs
             inputs0, _, targets0, dom_targets0 = self._parse_data(inputs)
             inputs1, inputs_z, targets1, dom_targets1 = self._parse_data(next(source_iter))
-
-            # inputs = torch.cat((inputs0, inputs1))
-            # inputs_z = torch.cat((inputs_z0, inputs_z1))
             targets = torch.cat((targets0, targets1))
             dom_targets = torch.cat((dom_targets0, dom_targets1))
 
@@ -248,7 +247,9 @@ class TeacherStudentTrainer(object):
             loss_cls = self.criterion_cls(cls_out, targets)
             loss_consis = self.criterion_consis(f_out_s1, f_out_t)
             loss_dom = torch.mean(F.log_softmax(self.netD(f_out_s),1))
-            loss = loss_cls + loss_consis + loss_dom*0.1
+            loss = loss_cls + \
+                    loss_consis * self._get_current_consistency_weight(epoch, consistency, consistency_rampup) + \
+                    loss_dom * 0.1
 
             prec, = accuracy(cls_out.data, targets.data)
             prec1 = prec[0]
@@ -293,6 +294,19 @@ class TeacherStudentTrainer(object):
         targets = Variable(pids.cuda()).long()
         dom_targets = Variable(domids.cuda()).long()
         return inputs, inputs_z, targets, dom_targets
+
+    def _get_current_consistency_weight(self, epoch, consistency, consistency_rampup):
+        # Consistency ramp-up from https://arxiv.org/abs/1610.02242
+        return consistency * self._sigmoid_rampup(epoch, consistency_rampup)
+
+    def _sigmoid_rampup(self, current, rampup_length):
+        """Exponential rampup from https://arxiv.org/abs/1610.02242"""
+        if rampup_length == 0:
+            return 1.0
+        else:
+            current = np.clip(current, 0.0, rampup_length)
+            phase = 1.0 - current / rampup_length
+            return float(np.exp(-5.0 * phase * phase))
 
 
 class InferenceBN(object):
