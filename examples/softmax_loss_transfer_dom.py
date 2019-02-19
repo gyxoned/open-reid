@@ -103,7 +103,7 @@ def main(args):
 
     dataset_target, _, train_loader_target, _, test_loader_target = \
         get_data(args.dataset_target, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers, args.num_instances, True)
+                 args.width, args.batch_size, args.workers, args.num_instances, False)
 
     # Create model
     model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=0)

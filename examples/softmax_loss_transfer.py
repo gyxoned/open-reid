@@ -130,6 +130,7 @@ def get_test_loader(dataset, height, width, batch_size, workers, testset=None):
 
 def create_model(args, num_classes):
     student_model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=0)
+    teacher_model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=0)
     netC = nn.Linear(args.features, num_classes, bias=True)
     netD = nn.Linear(args.features, 2, bias=True)
     # init.normal(netC.weight, std=0.001)
@@ -138,10 +139,11 @@ def create_model(args, num_classes):
     # init.constant(netD.bias, 0)
     initial_weights = load_checkpoint(args.init)
     student_model.load_state_dict(initial_weights['model_state_dict'])
+    teacher_model.load_state_dict(initial_weights['model_state_dict'])
     netC.load_state_dict(initial_weights['netC_state_dict'])
     netD.load_state_dict(initial_weights['netD_state_dict'])
 
-    return student_model, netC, netD
+    return student_model, teacher_model, netC, netD
 
 
 def main(args):
@@ -176,7 +178,7 @@ def main(args):
     test_loader_target = get_test_loader(dataset_target, args.height, args.width, args.batch_size, args.workers)
 
     # Create model
-    student_model, netC, netD = create_model(args, num_classes)
+    student_model, teacher_model, netC, netD = create_model(args, num_classes)
 
     # Load from checkpoint
     # start_epoch = best_mAP = 0
@@ -194,6 +196,7 @@ def main(args):
         #       .format(start_epoch, best_mAP))
 
     student_model = nn.DataParallel(student_model).cuda()
+    teacher_model = nn.DataParallel(teacher_model).cuda()
     netC = nn.DataParallel(netC).cuda()
     netD = nn.DataParallel(netD).cuda()
 
@@ -206,11 +209,14 @@ def main(args):
         evaluator.evaluate(test_loader_target, dataset_target.query, dataset_target.gallery)
         return
 
-    clusters = [50, 200, 300, 350]
-    epochs = [20, 30, 40, 50]
+    # clusters = [50, 200, 300, 350]
+    # epochs = [20, 30, 40, 50]
+
+    clusters = [100]
+    epochs = [50]
 
     for nc in range(len(clusters)):
-        teacher_model = copy.deepcopy(student_model)
+        teacher_model.load_state_dict(student_model.state_dict())
 
         # TODO cluster
         testset = dataset_target.trainval if args.combine_trainval else dataset_target.train
@@ -231,8 +237,8 @@ def main(args):
         new_bias = torch.FloatTensor(num_classes+clusters[nc]).cuda()
         init.normal(new_weight, std=0.001)
         init.constant(new_bias, 0)
-        new_weight[:num_classes] = netC.state_dict()['module.weight']
-        new_bias[:num_classes] = netC.state_dict()['module.bias']
+        new_weight[:netC.state_dict()['module.bias'].size(0)] = netC.state_dict()['module.weight']
+        new_bias[:netC.state_dict()['module.bias'].size(0)] = netC.state_dict()['module.bias']
         netC = nn.Linear(args.features, num_classes+clusters[nc], bias=True)
         netC.state_dict()['weight'] = new_weight
         netC.state_dict()['bias'] = new_bias
@@ -240,9 +246,9 @@ def main(args):
 
         # TODO data loader
         train_loader_source = get_train_loader(dataset_source, num_classes, args.height, args.width, 
-            args.batch_size//2, args.workers, args.num_instances, args.combine_trainval)
+            args.batch_size, args.workers, args.num_instances, args.combine_trainval)
         train_loader_target = get_train_loader(dataset_target, num_classes, args.height, args.width, 
-            args.batch_size//2, args.workers, args.num_instances, args.combine_trainval)
+            args.batch_size, args.workers, args.num_instances, args.combine_trainval)
         valset = list(set(dataset_source.val) | set(dataset_target.val))
         val_loader = get_test_loader(dataset_source, args.height, args.width, 
             args.batch_size, args.workers, testset=valset)
@@ -253,7 +259,7 @@ def main(args):
         new_params = [p for p in student_model.parameters() if id(p) not in base_param_ids]
         param_groups = [{'params': student_model.module.base.parameters(), 'lr_mult': 1.0},
                         {'params': new_params, 'lr_mult': 10.0},
-                        {'params': netC.parameters(), 'lr_mult': 10.0}]
+                        {'params': netC.parameters(), 'lr_mult': 100.0}]
 
         optimizer = torch.optim.SGD(param_groups, lr=lr,
                                     momentum=args.momentum,

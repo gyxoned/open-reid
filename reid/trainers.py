@@ -212,23 +212,25 @@ class TeacherStudentTrainer(object):
         losses_D = AverageMeter()
         precisions = AverageMeter()
 
-        target_iter = iter(cycle(data_loader_target))
+        source_iter = iter(cycle(data_loader_source))
 
         end = time.time()
-        for i, inputs in enumerate(data_loader_source):
+        for i, inputs in enumerate(data_loader_target):
             data_time.update(time.time() - end)
 
             # merge inputs
-            inputs0, inputs_z0, targets0, dom_targets0 = self._parse_data(inputs)
-            inputs1, inputs_z1, targets1, dom_targets1 = self._parse_data(next(target_iter))
+            inputs0, _, targets0, dom_targets0 = self._parse_data(inputs)
+            inputs1, inputs_z, targets1, dom_targets1 = self._parse_data(next(source_iter))
 
-            inputs = torch.cat((inputs0, inputs1))
-            inputs_z = torch.cat((inputs_z0, inputs_z1))
+            # inputs = torch.cat((inputs0, inputs1))
+            # inputs_z = torch.cat((inputs_z0, inputs_z1))
             targets = torch.cat((targets0, targets1))
             dom_targets = torch.cat((dom_targets0, dom_targets1))
 
             # forward
-            f_out_s = self.student_model(inputs)
+            f_out_s0 = self.student_model(inputs0)
+            f_out_s1 = self.student_model(inputs1)
+            f_out_s = torch.cat((f_out_s0, f_out_s1))
             f_out_t = self.teacher_model(inputs_z).detach()
 
             cls_out = self.netC(f_out_s)
@@ -244,7 +246,7 @@ class TeacherStudentTrainer(object):
             # backward main #
             # TODO loss weight adjustment
             loss_cls = self.criterion_cls(cls_out, targets)
-            loss_consis = self.criterion_consis(f_out_s, f_out_t)
+            loss_consis = self.criterion_consis(f_out_s1, f_out_t)
             loss_dom = torch.mean(F.log_softmax(self.netD(f_out_s),1))
             loss = loss_cls + loss_consis + loss_dom*0.1
 
@@ -252,7 +254,7 @@ class TeacherStudentTrainer(object):
             prec1 = prec[0]
 
             losses_cls.update(loss_cls.data[0], targets.size(0))
-            losses_consis.update(loss_consis.data[0], f_out_s.size(0))
+            losses_consis.update(loss_consis.data[0], f_out_t.size(0))
             losses_dom.update(loss_dom.data[0], f_out_s.size(0))
             losses_D.update(loss_D.data[0], f_out_s.size(0))
             precisions.update(prec1, targets.size(0))
@@ -275,7 +277,7 @@ class TeacherStudentTrainer(object):
                       'Loss_dom {:.3f} ({:.3f})\t'
                       'Loss_D {:.3f} ({:.3f})\t'
                       'Prec {:.2%} ({:.2%})\t'
-                      .format(num_cluster, epoch, i + 1, len(data_loader_source),
+                      .format(num_cluster, epoch, i + 1, len(data_loader_target),
                               batch_time.val, batch_time.avg,
                               data_time.val, data_time.avg,
                               losses_cls.val, losses_cls.avg,
