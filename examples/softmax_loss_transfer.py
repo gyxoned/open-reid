@@ -228,17 +228,17 @@ def main(args):
         c_predict = c_predict + num_classes
         for i in range(len(dataset_target.trainval)): 
             dataset_target.trainval[i] = list(dataset_target.trainval[i])
-            dataset_target.trainval[i][1] = c_predict[i]
+            dataset_target.trainval[i][1] = int(c_predict[i])
             dataset_target.trainval[i] = tuple(dataset_target.trainval[i])
-        dataset_target.val = dataset_target.trainval[:-len(dataset_target.val)]
+        dataset_target.val = dataset_target.trainval[-len(dataset_target.val):]
 
         # TODO update netC
         new_weight = torch.FloatTensor(num_classes+clusters[nc], args.features).cuda()
         new_bias = torch.FloatTensor(num_classes+clusters[nc]).cuda()
         init.normal(new_weight, std=0.001)
         init.constant(new_bias, 0)
-        new_weight[:netC.state_dict()['module.bias'].size(0)] = netC.state_dict()['module.weight']
-        new_bias[:netC.state_dict()['module.bias'].size(0)] = netC.state_dict()['module.bias']
+        new_weight[:num_classes] = netC.state_dict()['module.weight'][:num_classes]
+        new_bias[:num_classes] = netC.state_dict()['module.bias'][:num_classes]
         netC = nn.Linear(args.features, num_classes+clusters[nc], bias=True)
         netC.state_dict()['weight'] = new_weight
         netC.state_dict()['bias'] = new_bias
