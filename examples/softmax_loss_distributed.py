@@ -22,7 +22,7 @@ from reid.dist_metric import DistanceMetric
 from reid.trainers import Trainer
 from reid.evaluators import Evaluator
 from reid.utils.data import transforms as T
-from reid.utils.data.sampler import RandomMultipleGallerySampler
+from reid.utils.data.sampler import RandomMultipleGallerySampler, DistributedRandomMultipleGallerySampler
 from reid.utils.data.preprocessor import Preprocessor
 from reid.utils.logging import Logger
 from reid.utils.serialization import load_checkpoint, save_checkpoint
@@ -60,9 +60,10 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
 
     rmgs_flag = num_instances > 0
     if rmgs_flag:
-        sampler_type = RandomMultipleGallerySampler(train_set, num_instances)
+        sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
     else:
         sampler_type = None
+        
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
