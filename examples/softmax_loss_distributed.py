@@ -118,6 +118,7 @@ def main_worker(gpu, ngpus_per_node, args):
     global start_epoch, best_mAP
     cudnn.benchmark = True
     args.gpu = gpu
+    args.ngpus_per_node = ngpus_per_node
 
     torch.cuda.set_device(args.gpu)
     print("Use GPU: {} for training".format(args.gpu))
@@ -135,7 +136,7 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         log_dir = osp.dirname(args.resume)
         sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
-        
+
     if args.rank % ngpus_per_node == 0:
         print("==========\nArgs:{}\n==========".format(args))
 

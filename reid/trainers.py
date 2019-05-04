@@ -4,6 +4,8 @@ import time
 import torch
 # from torch.autograd import Variable
 
+import torch.distributed as dist
+
 from .evaluation_metrics import accuracy
 from .loss import OIMLoss, TripletLoss
 from .utils.meters import AverageMeter
@@ -40,7 +42,12 @@ class BaseTrainer(object):
             batch_time.update(time.time() - end)
             end = time.time()
 
-            if (i + 1) % print_freq == 0:
+            print_flag = True
+            if (args is not None):
+                if (dist.get_rank() % args.ngpus_per_node!=0):
+                    print_flag = False
+
+            if ((i + 1) % print_freq == 0) and (print_flag):
                 print('Epoch: [{}][{}/{}]\t'
                       'Time {:.3f} ({:.3f})\t'
                       'Data {:.3f} ({:.3f})\t'
