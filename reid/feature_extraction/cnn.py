@@ -8,7 +8,7 @@ from ..utils import to_torch
 def extract_cnn_feature(model, inputs, modules=None):
     model.eval()
     # with torch.no_grad():
-    inputs = to_torch(inputs).cuda()
+    inputs = to_torch(inputs)
     # inputs = Variable(inputs, volatile=True)
     if modules is None:
         outputs = model(inputs)

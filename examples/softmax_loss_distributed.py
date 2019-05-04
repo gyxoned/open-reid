@@ -9,6 +9,12 @@ import torch
 from torch import nn
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
+import torch.nn.parallel
+import torch.distributed as dist
+import torch.optim
+import torch.multiprocessing as mp
+import torch.utils.data
+import torch.utils.data.distributed
 
 from reid import datasets
 from reid import models
@@ -23,6 +29,7 @@ from reid.utils.serialization import load_checkpoint, save_checkpoint
 
 
 start_epoch = best_mAP = 0
+
 
 def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_instances,
              combine_trainval):
@@ -87,12 +94,40 @@ def main():
         torch.manual_seed(args.seed)
         cudnn.deterministic = True
 
-    main_worker(args)
+    if args.dist_url == "env://" and args.world_size == -1:
+        args.world_size = int(os.environ["WORLD_SIZE"])
+
+    # args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+
+    ngpus_per_node = torch.cuda.device_count()
+    # if args.multiprocessing_distributed:
+    #     # Since we have ngpus_per_node processes per node, the total world_size
+    #     # needs to be adjusted accordingly
+    args.world_size = ngpus_per_node * args.world_size
+    #     # Use torch.multiprocessing.spawn to launch distributed processes: the
+    #     # main_worker process function
+    mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+    # else:
+    #     # Simply call main_worker function
+    #     main_worker(args.gpu, ngpus_per_node, args)
 
 
-def main_worker(args):
+# def main_worker(ngpus_per_node, args):
+def main_worker(gpu, ngpus_per_node, args):
     global start_epoch, best_mAP
     cudnn.benchmark = True
+    args.gpu = gpu
+
+    torch.cuda.set_device(args.gpu)
+    # print("Use GPU: {} for training".format(args.gpu))
+    # Redirect print to both console and log file
+
+    # if args.distributed:
+    if args.dist_url == "env://" and args.rank == -1:
+        args.rank = int(os.environ["RANK"])
+    args.rank = args.rank * ngpus_per_node + gpu
+    dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                            world_size=args.world_size, rank=args.rank)
 
     if not args.evaluate:
         sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
@@ -101,6 +136,8 @@ def main_worker(args):
         sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
     print("==========\nArgs:{}\n==========".format(args))
 
+    args.batch_size = int(args.batch_size / ngpus_per_node)
+    args.workers = int(args.workers / ngpus_per_node)
     # Create data loaders
     #assert args.num_instances > 1, "num_instances should be greater than 1"
     #assert args.batch_size % args.num_instances == 0, \
@@ -122,8 +159,9 @@ def main_worker(args):
               .format(start_epoch, best_mAP))
 
 
-    model.cuda()
-    model = nn.DataParallel(model)
+    model.cuda(args.gpu)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+    # model = nn.DataParallel(model)
 
     # Distance metric
     # metric = DistanceMetric(algorithm=args.dist_metric)
@@ -139,7 +177,7 @@ def main_worker(args):
         return
 
     # Criterion
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
     # Optimizer
     if hasattr(model.module, 'base'):
@@ -169,21 +207,23 @@ def main_worker(args):
     # Start training
     for epoch in range(start_epoch, args.epochs):
         adjust_lr(epoch)
-        trainer.train(epoch, train_loader, optimizer)
+        trainer.train(epoch, train_loader, optimizer, args=args)
         if epoch < args.start_save:
             continue
         mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
-        save_checkpoint({
-            'state_dict': model.module.state_dict(),
-            'epoch': epoch + 1,
-            'best_mAP': best_mAP,
-        }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
 
-        print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
-              format(epoch, mAP, best_mAP, ' *' if is_best else ''))
+        if args.rank % ngpus_per_node == 0:
+            save_checkpoint({
+                'state_dict': model.module.state_dict(),
+                'epoch': epoch + 1,
+                'best_mAP': best_mAP,
+            }, is_best, fpath=osp.join(args.logs_dir, 'checkpoint.pth.tar'))
+
+            print('\n * Finished epoch {:3d}  mAP: {:5.1%}  best: {:5.1%}{}\n'.
+                  format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
     print('Test with best model:')
@@ -234,7 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--start_save', type=int, default=0,
                         help="start saving checkpoints after specific epoch")
-    parser.add_argument('--seed', type=int, default=1)
+    # parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--print-freq', type=int, default=1)
     # metric learning
     parser.add_argument('--dist-metric', type=str, default='euclidean',
@@ -245,4 +285,22 @@ if __name__ == '__main__':
                         default=osp.join(working_dir, 'data'))
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
                         default=osp.join(working_dir, 'logs'))
+    # distributed
+    parser.add_argument('--world-size', default=1, type=int,
+                        help='number of nodes for distributed training')
+    parser.add_argument('--rank', default=0, type=int,
+                        help='node rank for distributed training')
+    parser.add_argument('--dist-url', default='tcp://10.1.72.207:23456', type=str,
+                        help='url used to set up distributed training')
+    parser.add_argument('--dist-backend', default='nccl', type=str,
+                        help='distributed backend')
+    parser.add_argument('--seed', default=1, type=int,
+                        help='seed for initializing training. ')
+    # parser.add_argument('--gpu', default=None, type=int,
+    #                     help='GPU id to use.')
+    # parser.add_argument('-mp', '--multiprocessing-distributed', action='store_true',
+    #                     help='Use multi-processing distributed training to launch '
+    #                          'N processes per node, which has N GPUs. This is the '
+    #                          'fastest way to use PyTorch for either single node or '
+    #                          'multi node data parallel training')
     main()

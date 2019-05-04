@@ -15,7 +15,7 @@ class BaseTrainer(object):
         self.model = model
         self.criterion = criterion
 
-    def train(self, epoch, data_loader, optimizer, print_freq=1):
+    def train(self, epoch, data_loader, optimizer, args=None, print_freq=1):
         self.model.train()
 
         batch_time = AverageMeter()
@@ -27,7 +27,7 @@ class BaseTrainer(object):
         for i, inputs in enumerate(data_loader):
             data_time.update(time.time() - end)
 
-            inputs, targets = self._parse_data(inputs)
+            inputs, targets = self._parse_data(inputs, args)
             loss, prec1 = self._forward(inputs, targets)
 
             losses.update(loss.item(), targets.size(0))
@@ -52,7 +52,7 @@ class BaseTrainer(object):
                               losses.val, losses.avg,
                               precisions.val, precisions.avg))
 
-    def _parse_data(self, inputs):
+    def _parse_data(self, inputs, args):
         raise NotImplementedError
 
     def _forward(self, inputs, targets):
@@ -60,16 +60,18 @@ class BaseTrainer(object):
 
 
 class Trainer(BaseTrainer):
-    def _parse_data(self, inputs):
+    def _parse_data(self, inputs, args):
         imgs, _, pids, _ = inputs
-        inputs = [imgs]
-        targets = pids.cuda()
-        # inputs = [Variable(imgs)]
-        # targets = Variable(pids.cuda())
+        if(args is not None):
+            inputs = imgs.cuda(args.gpu, non_blocking=True)
+            targets = pids.cuda(args.gpu, non_blocking=True)
+        else:   
+            inputs = imgs.cuda(non_blocking=True)
+            targets = pids.cuda(non_blocking=True)
         return inputs, targets
 
     def _forward(self, inputs, targets):
-        outputs = self.model(*inputs)
+        outputs = self.model(inputs)
         if isinstance(self.criterion, torch.nn.CrossEntropyLoss):
             loss = self.criterion(outputs, targets)
             prec, = accuracy(outputs.data, targets.data)
