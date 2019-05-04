@@ -132,10 +132,10 @@ def main_worker(args):
     evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
         # metric.train(model, train_loader)
-        print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        # print("Validation:")
+        # evaluator.evaluate(val_loader, dataset.val, dataset.val)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
         return
 
     # Criterion
@@ -190,7 +190,7 @@ def main_worker(args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     # metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc=True)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
 
 
 if __name__ == '__main__':

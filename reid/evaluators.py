@@ -11,7 +11,7 @@ from .feature_extraction import extract_cnn_feature
 from .utils.meters import AverageMeter
 
 
-def extract_features(model, data_loader, print_freq=1, metric=None, args=None):
+def extract_features(model, data_loader, print_freq=10, metric=None, args=None):
     model.eval()
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -75,7 +75,7 @@ def pairwise_distance(features, query=None, gallery=None, metric=None):
 def evaluate_all(distmat, query=None, gallery=None,
                  query_ids=None, gallery_ids=None,
                  query_cams=None, gallery_cams=None,
-                 cmc_topk=(1, 5, 10), dataset=None, cmc=False):
+                 cmc_topk=(1, 5, 10), dataset=None, cmc_flag=False):
     if query is not None and gallery is not None:
         query_ids = [pid for _, pid, _ in query]
         gallery_ids = [pid for _, pid, _ in gallery]
@@ -89,9 +89,8 @@ def evaluate_all(distmat, query=None, gallery=None,
     mAP = mean_ap(distmat, query_ids, gallery_ids, query_cams, gallery_cams)
     print('Mean AP: {:4.1%}'.format(mAP))
 
-    if (not cmc):
+    if (not cmc_flag):
         return mAP
-
     # Compute all kinds of CMC scores
     if not dataset:
         cmc_configs = {
@@ -161,8 +160,8 @@ class Evaluator(object):
         self.model = model
         self.dataset = dataset
 
-    def evaluate(self, data_loader, query, gallery, metric=None, cmc=False, args=None):
+    def evaluate(self, data_loader, query, gallery, metric=None, cmc_flag=False, args=None):
         features, _ = extract_features(self.model, data_loader, args=args)
         distmat = pairwise_distance(features, query, gallery, metric=metric)
-        return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset, cmc=cmc)
+        return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset, cmc_flag=cmc_flag)
 

@@ -58,18 +58,14 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         normalizer,
     ])
 
-    rmgs_flag = num_instances > 0
-    if rmgs_flag:
-        sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
-    else:
-        sampler_type = None
+    assert(num_instances > 0)
+    sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
 
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
         batch_size=batch_size, num_workers=workers,
-        sampler=sampler_type,
-        shuffle=not rmgs_flag, pin_memory=True, drop_last=True)
+        sampler=sampler_type, shuffle=False, pin_memory=True, drop_last=True)
 
     val_loader = DataLoader(
         Preprocessor(dataset.val, root=dataset.images_dir,
@@ -175,10 +171,10 @@ def main_worker(gpu, ngpus_per_node, args):
     evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
         # metric.train(model, train_loader)
-        print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        # print("Validation:")
+        # evaluator.evaluate(val_loader, dataset.val, dataset.val)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
         return
 
     # Criterion
@@ -236,7 +232,7 @@ def main_worker(gpu, ngpus_per_node, args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     # metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc=True, args=args)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
 
 
 if __name__ == '__main__':
