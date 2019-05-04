@@ -160,7 +160,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
 
     model.cuda(args.gpu)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
     # model = nn.DataParallel(model)
 
     # Distance metric
