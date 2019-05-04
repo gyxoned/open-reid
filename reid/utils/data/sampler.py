@@ -149,7 +149,6 @@ class DistributedRandomMultipleGallerySampler(Sampler):
 
         ret = []
         for i_ind, i in enumerate(indices):
-            i = i.item()
             _, i_pid, i_cam = self.data_source[i]
 
             ret.append(i)
