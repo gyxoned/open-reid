@@ -13,6 +13,7 @@ import os.path as osp
 from scipy.io import loadmat
 import numpy as np
 import h5py
+import PIL
 from scipy.misc import imsave
 
 from ..utils.osutils import mkdir_if_missing

@@ -114,16 +114,16 @@ def main(args):
     model = nn.DataParallel(model).cuda()
 
     # Distance metric
-    metric = DistanceMetric(algorithm=args.dist_metric)
+    # metric = DistanceMetric(algorithm=args.dist_metric)
 
     # Evaluator
     evaluator = Evaluator(model, dataset=args.dataset)
     if args.evaluate:
-        metric.train(model, train_loader)
+        # metric.train(model, train_loader)
         print("Validation:")
-        evaluator.evaluate(val_loader, dataset.val, dataset.val, metric)
+        evaluator.evaluate(val_loader, dataset.val, dataset.val)
         print("Test:")
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery)
         return
 
     # Criterion
@@ -144,19 +144,12 @@ def main(args):
                                 weight_decay=args.weight_decay,
                                 nesterov=True)
    
-    #optimizer = torch.optim.Adam(param_groups, lr=args.lr,
-    #                             weight_decay=args.weight_decay)
     # Trainer
     trainer = Trainer(model, criterion)
 
     # Schedule learning rate
     def adjust_lr(epoch):
         step_size = 60 if args.arch == 'inception' else args.ss
-        # For warm up learning rate
-        #if epoch < step_size:
-        #    lr = (epoch + 1) * args.lr / (step_size)
-        #else:
-        #    lr = args.lr * (0.1 ** (epoch // step_size))
         lr = args.lr * (0.1 ** (epoch // step_size))
         for g in optimizer.param_groups:
             g['lr'] = lr * g.get('lr_mult', 1)
@@ -167,7 +160,7 @@ def main(args):
         trainer.train(epoch, train_loader, optimizer)
         if epoch < args.start_save:
             continue
-        _, mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
@@ -184,16 +177,16 @@ def main(args):
     print('Test with best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
-    metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, metric)
+    # metric.train(model, train_loader)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc=True)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Softmax loss classification")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='cuhk03',
+    parser.add_argument('-d', '--dataset', type=str, default='market1501',
                         choices=datasets.names())
-    parser.add_argument('-b', '--batch-size', type=int, default=112)
+    parser.add_argument('-b', '--batch-size', type=int, default=64)
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('--split', type=int, default=0)
     parser.add_argument('--height', type=int,
@@ -205,7 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('--combine-trainval', action='store_true',
                         help="train and val sets together for training, "
                              "val set alone for validation")
-    parser.add_argument('--num-instances', type=int, default=7,
+    parser.add_argument('--num-instances', type=int, default=4,
                         help="each minibatch consist of "
                              "(batch_size // num_instances) identities, and "
                              "each identity has num_instances instances, "
@@ -218,7 +211,7 @@ if __name__ == '__main__':
     parser.add_argument('--sphere', action='store_true',
                         help = "use sphere")
     # optimizer
-    parser.add_argument('--lr', type=float, default=0.1,
+    parser.add_argument('--lr', type=float, default=0.01,
                         help="learning rate of new parameters, for pretrained "
                              "parameters it is 10 times smaller than this")
     parser.add_argument('--momentum', type=float, default=0.9)
@@ -228,7 +221,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume', type=str, default='', metavar='PATH')
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluation only")
-    parser.add_argument('--epochs', type=int, default=70)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--start_save', type=int, default=0,
                         help="start saving checkpoints after specific epoch")
     parser.add_argument('--seed', type=int, default=1)

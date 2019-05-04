@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 import time
 
 import torch
-from torch.autograd import Variable
+# from torch.autograd import Variable
 
 from .evaluation_metrics import accuracy
 from .loss import OIMLoss, TripletLoss
@@ -30,7 +30,7 @@ class BaseTrainer(object):
             inputs, targets = self._parse_data(inputs)
             loss, prec1 = self._forward(inputs, targets)
 
-            losses.update(loss.data[0], targets.size(0))
+            losses.update(loss.item(), targets.size(0))
             precisions.update(prec1, targets.size(0))
 
             optimizer.zero_grad()
@@ -62,8 +62,10 @@ class BaseTrainer(object):
 class Trainer(BaseTrainer):
     def _parse_data(self, inputs):
         imgs, _, pids, _ = inputs
-        inputs = [Variable(imgs)]
-        targets = Variable(pids.cuda())
+        inputs = [imgs]
+        targets = pids.cuda()
+        # inputs = [Variable(imgs)]
+        # targets = Variable(pids.cuda())
         return inputs, targets
 
     def _forward(self, inputs, targets):
