@@ -73,8 +73,8 @@ class Trainer(BaseTrainer):
             inputs = imgs.cuda(args.gpu, non_blocking=True)
             targets = pids.cuda(args.gpu, non_blocking=True)
         else:   
-            inputs = imgs.cuda(non_blocking=True)
-            targets = pids.cuda(non_blocking=True)
+            inputs = imgs.cuda()
+            targets = pids.cuda()
         return inputs, targets
 
     def _forward(self, inputs, targets):
