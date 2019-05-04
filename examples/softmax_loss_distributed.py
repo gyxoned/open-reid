@@ -63,7 +63,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
     else:
         sampler_type = None
-        
+
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
                      transform=train_transformer),
@@ -83,7 +83,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         batch_size=batch_size, num_workers=workers,
         shuffle=False, pin_memory=True)
 
-    return dataset, num_classes, train_loader, val_loader, test_loader
+    return dataset, num_classes, train_loader, val_loader, test_loader, sampler_type
 
 
 def main():
@@ -120,7 +120,7 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
     torch.cuda.set_device(args.gpu)
-    # print("Use GPU: {} for training".format(args.gpu))
+    print("Use GPU: {} for training".format(args.gpu))
     # Redirect print to both console and log file
 
     # if args.distributed:
@@ -135,7 +135,9 @@ def main_worker(gpu, ngpus_per_node, args):
     else:
         log_dir = osp.dirname(args.resume)
         sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
-    print("==========\nArgs:{}\n==========".format(args))
+        
+    if args.rank % ngpus_per_node == 0:
+        print("==========\nArgs:{}\n==========".format(args))
 
     args.batch_size = int(args.batch_size / ngpus_per_node)
     args.workers = int(args.workers / ngpus_per_node)
@@ -143,7 +145,7 @@ def main_worker(gpu, ngpus_per_node, args):
     #assert args.num_instances > 1, "num_instances should be greater than 1"
     #assert args.batch_size % args.num_instances == 0, \
     #    'num_instances should divide batch_size'
-    dataset, num_classes, train_loader, val_loader, test_loader = \
+    dataset, num_classes, train_loader, val_loader, test_loader, train_sampler = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
                  args.width, args.batch_size, args.workers, args.num_instances,
                  args.combine_trainval)
@@ -207,6 +209,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Start training
     for epoch in range(start_epoch, args.epochs):
+        train_sampler.set_epoch(epoch)
         adjust_lr(epoch)
         trainer.train(epoch, train_loader, optimizer, args=args)
         if epoch < args.start_save:

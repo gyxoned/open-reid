@@ -7,6 +7,9 @@ import numpy as np
 from ..serialization import read_json
 
 
+import torch.distributed as dist
+
+
 def _pluck(identities, indices, relabel=False):
     ret = []
     for index, pid in enumerate(indices):
