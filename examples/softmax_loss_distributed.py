@@ -120,6 +120,7 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
     args.ngpus_per_node = ngpus_per_node
 
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     torch.cuda.set_device(args.gpu)
     print("Use GPU: {} for training".format(args.gpu))
     # Redirect print to both console and log file
@@ -166,7 +167,6 @@ def main_worker(gpu, ngpus_per_node, args):
 
     model.cuda(args.gpu)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
-    # model = nn.DataParallel(model)
 
     # Distance metric
     # metric = DistanceMetric(algorithm=args.dist_metric)
@@ -216,7 +216,7 @@ def main_worker(gpu, ngpus_per_node, args):
         trainer.train(epoch, train_loader, optimizer, args=args)
         if epoch < args.start_save:
             continue
-        mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val)
+        mAP = evaluator.evaluate(val_loader, dataset.val, dataset.val, args=args)
 
         is_best = mAP > best_mAP
         best_mAP = max(mAP, best_mAP)
@@ -236,7 +236,7 @@ def main_worker(gpu, ngpus_per_node, args):
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.module.load_state_dict(checkpoint['state_dict'])
     # metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc=True)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc=True, args=args)
 
 
 if __name__ == '__main__':

@@ -4,13 +4,14 @@ from collections import OrderedDict
 
 import torch
 # from torch.autograd import Variable
+import torch.distributed as dist
 
 from .evaluation_metrics import cmc, mean_ap
 from .feature_extraction import extract_cnn_feature
 from .utils.meters import AverageMeter
 
 
-def extract_features(model, data_loader, print_freq=1, metric=None):
+def extract_features(model, data_loader, print_freq=1, metric=None, args=None):
     model.eval()
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -30,6 +31,11 @@ def extract_features(model, data_loader, print_freq=1, metric=None):
 
             batch_time.update(time.time() - end)
             end = time.time()
+
+            print_flag = True
+            if (args is not None):
+                if (dist.get_rank() % args.ngpus_per_node!=0):
+                    print_flag = False
 
             if (i + 1) % print_freq == 0:
                 print('Extract Features: [{}/{}]\t'
@@ -155,8 +161,8 @@ class Evaluator(object):
         self.model = model
         self.dataset = dataset
 
-    def evaluate(self, data_loader, query, gallery, metric=None, cmc=False):
-        features, _ = extract_features(self.model, data_loader)
+    def evaluate(self, data_loader, query, gallery, metric=None, cmc=False, args=None):
+        features, _ = extract_features(self.model, data_loader, args=args)
         distmat = pairwise_distance(features, query, gallery, metric=metric)
         return evaluate_all(distmat, query=query, gallery=gallery, dataset=self.dataset, cmc=cmc)
 
