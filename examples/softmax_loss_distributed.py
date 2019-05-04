@@ -140,15 +140,16 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.rank % ngpus_per_node == 0:
         print("==========\nArgs:{}\n==========".format(args))
 
-    args.batch_size = int(args.batch_size / ngpus_per_node)
-    args.workers = int(args.workers / ngpus_per_node)
+    batch_size = int(args.batch_size / ngpus_per_node)
+    workers = int(args.workers / ngpus_per_node)
+    print("batch size is {}, worker is {}".format(batch_size, workers))
     # Create data loaders
     #assert args.num_instances > 1, "num_instances should be greater than 1"
     #assert args.batch_size % args.num_instances == 0, \
     #    'num_instances should divide batch_size'
     dataset, num_classes, train_loader, val_loader, test_loader, train_sampler = \
         get_data(args.dataset, args.split, args.data_dir, args.height,
-                 args.width, args.batch_size, args.workers, args.num_instances,
+                 args.width, batch_size, workers, args.num_instances,
                  args.combine_trainval)
 
     # Create model
