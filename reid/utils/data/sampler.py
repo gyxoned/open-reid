@@ -109,7 +109,7 @@ class DistributedRandomMultipleGallerySampler(Sampler):
 
         self.num_replicas = num_replicas
         self.rank = rank
-        # print("sampler rank: {}".format(self.rank))
+        print("sampler rank: {}".format(self.rank))
         self.epoch = 0
 
         self.data_source = data_source
