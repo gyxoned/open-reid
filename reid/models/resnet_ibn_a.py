@@ -185,7 +185,7 @@ def resnet50_ibn_a(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
     if pretrained:
-        state_dict = torch.load(model_urls['resnet50a'])['state_dict']
+        state_dict = torch.load(model_urls['resnet50a'], map_location=torch.device('cpu'))['state_dict']
         state_dict = remove_module_key(state_dict)
         model.load_state_dict(state_dict)
         # model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
@@ -199,7 +199,7 @@ def resnet101_ibn_a(pretrained=False, **kwargs):
     """
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     if pretrained:
-        state_dict = torch.load(model_urls['resnet101a'])['state_dict']
+        state_dict = torch.load(model_urls['resnet101a'], map_location=torch.device('cpu'))['state_dict']
         state_dict = remove_module_key(state_dict)
         model.load_state_dict(state_dict)
         # model.load_state_dict(model_zoo.load_url(model_urls['resnet101']))

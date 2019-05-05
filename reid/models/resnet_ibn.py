@@ -82,7 +82,9 @@ class ResNetIBN(nn.Module):
 
         if self.has_embedding:
             x = self.feat(x)
+        x = x.view(x.size(0), x.size(1), 1)
         x = self.feat_bn(x)
+        x = x.view(x.size(0), x.size(1))
         if self.training is False:
             x = F.normalize(x)
             return x

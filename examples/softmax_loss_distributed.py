@@ -98,29 +98,18 @@ def main():
     # args.distributed = args.world_size > 1 or args.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
-    # if args.multiprocessing_distributed:
-    #     # Since we have ngpus_per_node processes per node, the total world_size
-    #     # needs to be adjusted accordingly
     args.world_size = ngpus_per_node * args.world_size
-    #     # Use torch.multiprocessing.spawn to launch distributed processes: the
-    #     # main_worker process function
     mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    # else:
-    #     # Simply call main_worker function
-    #     main_worker(args.gpu, ngpus_per_node, args)
-
+    # debug
+    # main_worker(0, ngpus_per_node, args)
 
 # def main_worker(ngpus_per_node, args):
 def main_worker(gpu, ngpus_per_node, args):
     global start_epoch, best_mAP
-    cudnn.benchmark = True
     args.gpu = gpu
     args.ngpus_per_node = ngpus_per_node
 
-    torch.cuda.set_device(args.gpu)
     print("Use GPU: {} for training".format(args.gpu))
-    # Redirect print to both console and log file
-
     # if args.distributed:
     if args.dist_url == "env://" and args.rank == -1:
         args.rank = int(os.environ["RANK"])
@@ -128,13 +117,14 @@ def main_worker(gpu, ngpus_per_node, args):
     dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                             world_size=args.world_size, rank=args.rank)
 
-    if not args.evaluate:
-        sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
-    else:
-        log_dir = osp.dirname(args.resume)
-        sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
-
+    torch.cuda.set_device(args.gpu)
+    cudnn.benchmark = True
     if args.rank % ngpus_per_node == 0:
+        if not args.evaluate:
+            sys.stdout = Logger(osp.join(args.logs_dir, 'log.txt'))
+        else:
+            log_dir = osp.dirname(args.resume)
+            sys.stdout = Logger(osp.join(log_dir, 'log_test.txt'))
         print("==========\nArgs:{}\n==========".format(args))
 
     batch_size = int(args.batch_size / ngpus_per_node)
@@ -160,9 +150,9 @@ def main_worker(gpu, ngpus_per_node, args):
         print("=> Start epoch {}  best mAP {:.1%}"
               .format(start_epoch, best_mAP))
 
-
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda(args.gpu)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], find_unused_parameters=True)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], output_device=args.gpu, find_unused_parameters=True)
 
     # Distance metric
     # metric = DistanceMetric(algorithm=args.dist_metric)
