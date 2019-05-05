@@ -6,32 +6,36 @@ from torch.nn import init
 import torchvision
 import torch
 
+from .resnet_ibn_a import resnet50_ibn_a, resnet101_ibn_a, resnet152_ibn_a
+from .resnet_ibn_b import resnet50_ibn_b, resnet101_ibn_b, resnet152_ibn_b
 
-__all__ = ['ResNet', 'resnet18', 'resnet34', 'resnet50', 'resnet101',
-           'resnet152']
+
+__all__ = ['ResNetIBN', 'resnet_ibn50a', 'resnet_ibn101a', 'resne_ibn152a',
+            'resnet_ibn50b', 'resnet_ibn101b', 'resne_ibn152b']
 
 
-class ResNet(nn.Module):
+class ResNetIBN(nn.Module):
     __factory = {
-        18: torchvision.models.resnet18,
-        34: torchvision.models.resnet34,
-        50: torchvision.models.resnet50,
-        101: torchvision.models.resnet101,
-        152: torchvision.models.resnet152,
+        '50a': resnet50_ibn_a,
+        '101a': resnet101_ibn_a,
+        '152a': resnet152_ibn_a,
+        '50b': resnet50_ibn_b,
+        '101b': resnet101_ibn_b,
+        '152b': resnet152_ibn_b,
     }
 
-    def __init__(self, depth, pretrained=True, cut_at_pooling=False,
-                 num_features=0, norm=False, dropout=0, num_classes=0):
-        super(ResNet, self).__init__()
+    def __init__(self, depth, pretrained=False, cut_at_pooling=False,
+                 num_features=256, norm=False, dropout=0.5, num_classes=0):
+        super(ResNetIBN, self).__init__()
 
         self.depth = depth
         self.pretrained = pretrained
         self.cut_at_pooling = cut_at_pooling
         self.eps = 1e-12
         # Construct base (pretrained) resnet
-        if depth not in ResNet.__factory:
+        if depth not in ResNetIBN.__factory:
             raise KeyError("Unsupported depth:", depth)
-        self.base = ResNet.__factory[depth](pretrained=pretrained)
+        self.base = ResNetIBN.__factory[depth](pretrained=pretrained)
 
         if not self.cut_at_pooling:
             self.num_features = num_features
@@ -107,21 +111,25 @@ class ResNet(nn.Module):
                     init.constant_(m.bias, 0)
 
 
-def resnet18(**kwargs):
-    return ResNet(18, **kwargs)
+def resnet_ibn50a(**kwargs):
+    return ResNetIBN('50a', **kwargs)
 
 
-def resnet34(**kwargs):
-    return ResNet(34, **kwargs)
+def resnet_ibn101a(**kwargs):
+    return ResNetIBN('101a', **kwargs)
 
 
-def resnet50(**kwargs):
-    return ResNet(50, **kwargs)
+def resne_ibn152a(**kwargs):
+    return ResNetIBN('152a', **kwargs)
 
 
-def resnet101(**kwargs):
-    return ResNet(101, **kwargs)
+def resnet_ibn50b(**kwargs):
+    return ResNetIBN('50b', **kwargs)
 
 
-def resnet152(**kwargs):
-    return ResNet(152, **kwargs)
+def resnet_ibn101b(**kwargs):
+    return ResNetIBN('101b', **kwargs)
+
+
+def resne_ibn152b(**kwargs):
+    return ResNet('152b', **kwargs)

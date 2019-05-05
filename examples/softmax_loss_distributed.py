@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 import argparse
+import os
 import os.path as osp
 import random
 import numpy as np
@@ -116,7 +117,6 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
     args.ngpus_per_node = ngpus_per_node
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     torch.cuda.set_device(args.gpu)
     print("Use GPU: {} for training".format(args.gpu))
     # Redirect print to both console and log file
@@ -150,7 +150,7 @@ def main_worker(gpu, ngpus_per_node, args):
                  args.combine_trainval)
 
     # Create model
-    model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes)
+    model = models.create(args.arch, num_features=args.features, dropout=args.dropout, num_classes=num_classes, pretrained=True)
     # Load from checkpoint
     if args.resume:
         checkpoint = load_checkpoint(args.resume)
