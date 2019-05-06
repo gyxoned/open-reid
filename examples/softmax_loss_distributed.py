@@ -150,7 +150,7 @@ def main_worker(gpu, ngpus_per_node, args):
         print("=> Start epoch {}  best mAP {:.1%}"
               .format(start_epoch, best_mAP))
 
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    #model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model.cuda(args.gpu)
     model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu], output_device=args.gpu, find_unused_parameters=True)
 
