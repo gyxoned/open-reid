@@ -16,6 +16,7 @@ import torch.optim
 import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
+from torch.utils.data.distributed import DistributedSampler
 
 from reid import datasets
 from reid import models
@@ -59,8 +60,13 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
         normalizer,
     ])
 
-    assert(num_instances > 0)
-    sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
+    # assert(num_instances > 0)
+    # sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
+    rmgs_flag = num_instances > 0
+    if rmgs_flag:
+        sampler_type = DistributedRandomMultipleGallerySampler(train_set, num_instances)
+    else:
+        sampler_type = DistributedSampler(train_set)
 
     train_loader = DataLoader(
         Preprocessor(train_set, root=dataset.images_dir,
@@ -101,7 +107,7 @@ def main():
     args.world_size = ngpus_per_node * args.world_size
     mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
     # debug
-    # main_worker(0, ngpus_per_node, args)
+    #main_worker(0, ngpus_per_node, args)
 
 # def main_worker(ngpus_per_node, args):
 def main_worker(gpu, ngpus_per_node, args):
@@ -218,11 +224,11 @@ def main_worker(gpu, ngpus_per_node, args):
                   format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    print('Test with best model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    model.module.load_state_dict(checkpoint['state_dict'])
+    # print('Test with best model:')
+    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    # model.module.load_state_dict(checkpoint['state_dict'])
     # metric.train(model, train_loader)
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
+    # evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
 
 
 if __name__ == '__main__':

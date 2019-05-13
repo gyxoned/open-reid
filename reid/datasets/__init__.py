@@ -8,6 +8,7 @@ from .dukemtmc import DukeMTMC
 from .market1501 import Market1501
 from .msmt17 import MSMT17
 from .viper import VIPeR
+from .aic19 import AIC19
 
 
 __factory = {
@@ -18,6 +19,7 @@ __factory = {
     'market1501': Market1501,
     'dukemtmc': DukeMTMC,
     'msmt17': MSMT17,
+    'aic19': AIC19
 }
 
 
