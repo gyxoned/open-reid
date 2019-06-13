@@ -224,11 +224,12 @@ def main_worker(gpu, ngpus_per_node, args):
                   format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    # print('Test with best model:')
-    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-    # model.module.load_state_dict(checkpoint['state_dict'])
-    # metric.train(model, train_loader)
-    # evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
+    if args.rank % ngpus_per_node == 0:
+        print('Test with best model:')
+        checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+        model.module.load_state_dict(checkpoint['state_dict'])
+        # metric.train(model, train_loader)
+        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
 
 
 if __name__ == '__main__':
