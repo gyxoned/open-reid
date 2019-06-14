@@ -48,7 +48,7 @@ def get_data(name, split_id, data_dir, height, width, batch_size, workers, num_i
 
     train_transformer = T.Compose([
         T.RandomSizedRectCrop(height, width),
-        T.RandomSizedEarser(),
+        T.RandomSizedEarser(asratio=0.5),
         T.RandomHorizontalFlip(),
         T.ToTensor(),
         normalizer,
@@ -224,12 +224,12 @@ def main_worker(gpu, ngpus_per_node, args):
                   format(epoch, mAP, best_mAP, ' *' if is_best else ''))
 
     # Final test
-    if args.rank % ngpus_per_node == 0:
-        print('Test with best model:')
-        checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
-        model.module.load_state_dict(checkpoint['state_dict'])
+    #if args.rank % ngpus_per_node == 0:
+    print('Test with best model:')
+    checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    model.module.load_state_dict(checkpoint['state_dict'])
         # metric.train(model, train_loader)
-        evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, args=args)
 
 
 if __name__ == '__main__':
